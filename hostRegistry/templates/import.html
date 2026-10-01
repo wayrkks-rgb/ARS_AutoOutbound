@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}일괄등록{% endblock %}
+{% block body %}
+<h1>일괄 등록 (Import)</h1>
+<p class="sub">CSV 또는 Excel(.xlsx)로 서버 정보를 한 번에 등록·갱신합니다. (패턴은 모니터링등록 메뉴에서 관리)</p>
+
+<div class="card" style="margin-bottom:18px">
+  <form method="post" enctype="multipart/form-data">
+    <div class="toolbar" style="margin-bottom:0">
+      <input type="file" name="file" accept=".csv,.xlsx" style="max-width:380px">
+      <button class="btn btn-primary" type="submit">업로드</button>
+      <span class="spacer"></span>
+      <a class="btn btn-outline" href="{{ url_for('template_csv') }}">CSV 양식</a>
+      <a class="btn btn-outline" href="{{ url_for('template_xlsx') }}">Excel 양식</a>
+    </div>
+  </form>
+  <div class="hint" style="color:var(--muted);font-size:12px;margin-top:12px;line-height:1.7">
+    · 헤더(필수): <span class="mono">hostname, ip, department, name, phone</span> · 선택: <span class="mono">DAY, NIGHT</span> (Y/N)<br>
+    · 기존 호스트네임은 갱신(upsert), 새 호스트네임은 추가. 파일 내 중복 호스트네임은 거부됩니다.<br>
+    · <strong style="color:var(--danger)">엑셀 주의</strong>: 핸드폰번호 앞의 0이 사라지지 않도록 열을 "텍스트" 서식으로 하거나 하이픈 포함(010-1234-5678)으로 입력하세요.<br>
+    · keyword(패턴) 열은 무시됩니다. 기존 등록된 패턴은 import로 사라지지 않고 보존됩니다.<br>
+    · CSV 인코딩 UTF-8 / CP949 자동 인식, 최대 10MB.
+  </div>
+</div>
+
+{% if report %}
+<div class="stat-row">
+  <div class="stat"><div class="num" style="color:var(--ok)">{{ report.added }}</div><div class="lbl">추가</div></div>
+  <div class="stat"><div class="num" style="color:var(--orange-dark)">{{ report.updated }}</div><div class="lbl">갱신</div></div>
+  <div class="stat"><div class="num" style="color:var(--warn)">{{ report.warnings|length }}</div><div class="lbl">확인 필요(경고)</div></div>
+  <div class="stat"><div class="num" style="color:var(--danger)">{{ report.rejected|length }}</div><div class="lbl">거부</div></div>
+</div>
+
+{% if report.rejected %}
+<div class="card" style="margin-bottom:16px">
+  <h3 style="margin:0 0 10px"><span class="pill rej">거부</span> 등록되지 않은 행</h3>
+  <table><thead><tr><th>행</th><th>호스트네임</th><th>사유</th></tr></thead><tbody>
+    {% for r in report.rejected %}<tr><td class="mono">{{ r.row }}</td><td class="mono">{{ r.hostname }}</td><td>{{ r.reasons|join(', ') }}</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% endif %}
+
+{% if report.warnings %}
+<div class="card">
+  <h3 style="margin:0 0 10px"><span class="pill warn">경고</span> 등록됨 · 번호 확인 권장</h3>
+  <p class="sub" style="margin-bottom:12px">같은 부서/이름에 기존과 다른 번호로 등록된 항목입니다. (동명이인/번호변경이면 정상)</p>
+  <table><thead><tr><th>행</th><th>호스트네임</th><th>부서/이름</th><th>입력 번호</th><th>기존 번호</th></tr></thead><tbody>
+    {% for w in report.warnings %}<tr><td class="mono">{{ w.row }}</td><td class="mono">{{ w.hostname }}</td>
+      <td>{{ w.department }}/{{ w.name }}</td><td class="mono">{{ w.phone }}</td>
+      <td class="mono">{% for e in w.existing %}{{ e.hostname }}:{{ e.phone }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% endif %}
+
+<div style="margin-top:18px"><a class="btn btn-primary" href="{{ url_for('index') }}">목록 보기</a></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,4 @@
+{% macro sortth(endpoint, sort, dir, key, label, extra={}) %}
+{% set ndir = 'desc' if (sort==key and dir=='asc') else 'asc' %}
+<th class="sortable"><a href="{{ url_for(endpoint, sort=key, dir=ndir, **extra) }}">{{ label }}<span class="sarrow">{% if sort==key %}{{ '▲' if dir=='asc' else '▼' }}{% else %}↕{% endif %}</span></a></th>
+{% endmacro %}
