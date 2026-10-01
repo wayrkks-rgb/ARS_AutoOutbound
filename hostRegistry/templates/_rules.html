@@ -1,0 +1,11 @@
+{% macro rule_summary(h) %}
+{% for r in h.rules %}
+<span class="rule-sum">
+  <span class="rn">{{ r.name }}</span>
+  <span class="rm">{{ r.metrics|join(', ') if r.metrics != ['*'] else '* 전체' }}{% if r.keywords %} + memo[{{ r.keywords|join(', ') }}]{% endif %}
+    · {% if r.DAY=='Y' and r.NIGHT=='Y' %}주·야{% elif r.DAY=='Y' %}주간{% elif r.NIGHT=='Y' %}야간{% else %}<span style="color:var(--danger)">발신 안 함</span>{% endif %}
+    · {{ '등급무관' if r.any_level=='Y' else '심각만' }}</span><br>
+  {% for c in r.contacts %}{% if not loop.first %} <span class="rm">→</span> {% endif %}{{ c.name }} <span class="mono rm">{{ c.phone }}</span>{% endfor %}
+</span>
+{% endfor %}
+{% endmacro %}

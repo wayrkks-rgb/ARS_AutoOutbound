@@ -15,11 +15,15 @@
     </div>
   </form>
   <div class="hint" style="color:var(--muted);font-size:12px;margin-top:12px;line-height:1.7">
-    · 헤더(필수): <span class="mono">hostname, ip, department, name, phone</span> · 선택: <span class="mono">DAY, NIGHT</span> (Y/N)<br>
-    · 기존 호스트네임은 갱신(upsert), 새 호스트네임은 추가. 파일 내 중복 호스트네임은 거부됩니다.<br>
+    · <strong>한 행 = 서버 × 규칙 × 담당자</strong>. 같은 서버·같은 규칙의 담당자는 여러 행으로 쓰고 <span class="mono">contact_seq</span>(1=정, 2=부 …)로 순서를 정합니다.<br>
+    · 헤더(필수): <span class="mono">hostname, ip, department, name, phone</span>
+      · 선택: <span class="mono">rule_name, metrics, keywords, any_level, DAY, NIGHT, contact_seq</span><br>
+    · <span class="mono">metrics</span>/<span class="mono">keywords</span> 는 세미콜론(;)으로 구분. metrics 를 비우면 <span class="mono">*</span>(기본 담당). rule_name 이 없으면 '기본'.<br>
+    · <span class="mono">any_level</span>=Y 이면 등급 무관 발신, N 이면 "심각"만. DAY/NIGHT 는 Y/N.<br>
+    · 파일에 있는 서버는 <strong>규칙 전체를 파일 내용으로 교체</strong>합니다. 파일에 없는 열은 같은 이름의 기존 규칙 값을 유지합니다.<br>
+    · 한 서버의 행 중 하나라도 오류가 있으면 그 서버 전체를 반영하지 않습니다.<br>
     · <strong style="color:var(--danger)">엑셀 주의</strong>: 핸드폰번호 앞의 0이 사라지지 않도록 열을 "텍스트" 서식으로 하거나 하이픈 포함(010-1234-5678)으로 입력하세요.<br>
-    · keyword(패턴) 열은 무시됩니다. 기존 등록된 패턴은 import로 사라지지 않고 보존됩니다.<br>
-    · CSV 인코딩 UTF-8 / CP949 자동 인식, 최대 10MB.
+    · [내보내기] 파일을 그대로 수정해서 다시 올릴 수 있습니다. CSV 인코딩 UTF-8 / CP949 자동 인식, 최대 10MB.
   </div>
 </div>
 
@@ -33,7 +37,7 @@
 
 {% if report.rejected %}
 <div class="card" style="margin-bottom:16px">
-  <h3 style="margin:0 0 10px"><span class="pill rej">거부</span> 등록되지 않은 행</h3>
+  <h3 style="margin:0 0 10px"><span class="pill rej">거부</span> 반영되지 않은 서버</h3>
   <table><thead><tr><th>행</th><th>호스트네임</th><th>사유</th></tr></thead><tbody>
     {% for r in report.rejected %}<tr><td class="mono">{{ r.row }}</td><td class="mono">{{ r.hostname }}</td><td>{{ r.reasons|join(', ') }}</td></tr>{% endfor %}
   </tbody></table>
@@ -43,11 +47,10 @@
 {% if report.warnings %}
 <div class="card">
   <h3 style="margin:0 0 10px"><span class="pill warn">경고</span> 등록됨 · 번호 확인 권장</h3>
-  <p class="sub" style="margin-bottom:12px">같은 부서/이름에 기존과 다른 번호로 등록된 항목입니다. (동명이인/번호변경이면 정상)</p>
-  <table><thead><tr><th>행</th><th>호스트네임</th><th>부서/이름</th><th>입력 번호</th><th>기존 번호</th></tr></thead><tbody>
+  <p class="sub" style="margin-bottom:12px">같은 이름의 담당자가 다른 서버에 다른 번호로 등록되어 있습니다. (동명이인/번호변경이면 정상)</p>
+  <table><thead><tr><th>행</th><th>호스트네임</th><th>담당자</th><th>입력 번호</th><th>기존 번호 (서버)</th></tr></thead><tbody>
     {% for w in report.warnings %}<tr><td class="mono">{{ w.row }}</td><td class="mono">{{ w.hostname }}</td>
-      <td>{{ w.department }}/{{ w.name }}</td><td class="mono">{{ w.phone }}</td>
-      <td class="mono">{% for e in w.existing %}{{ e.hostname }}:{{ e.phone }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>{% endfor %}
+      <td>{{ w.name }}</td><td class="mono">{{ w.phone }}</td><td class="mono">{{ w.other_phone }} ({{ w.other_host }})</td></tr>{% endfor %}
   </tbody></table>
 </div>
 {% endif %}

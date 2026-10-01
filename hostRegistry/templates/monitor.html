@@ -1,175 +1,148 @@
 {% extends "base.html" %}
 {% from "_pager.html" import pager %}
 {% from "_sort.html" import sortth %}
-{% block title %}모니터링등록{% endblock %}
+{% from "_rules.html" import rule_summary %}
+{% block title %}규칙 일괄적용{% endblock %}
 {% block body %}
-<h1>모니터링 등록</h1>
-<p class="sub">서버를 선택해 모니터링 패턴(keyword)을 등록·삭제합니다. 총 {{ total }}건 · {{ page }}/{{ pages }} 페이지
+<h1>규칙 일괄적용</h1>
+<p class="sub">여러 서버에 같은 수신 규칙(예: DBA 담당)을 한 번에 추가·교체하거나 삭제합니다. 총 {{ total }}건 · {{ page }}/{{ pages }} 페이지
 {% if current_role!='admin' %} · <span style="color:var(--orange-dark)">조회 전용 계정</span>{% endif %}</p>
 
 <div class="toolbar">
   <form method="get" class="searchform">
-    <select name="field" style="max-width:140px">
+    <select name="field" style="max-width:130px">
+      <option value="all" {{ 'selected' if field=='all' }}>전체</option>
       {% for f in SEARCH_FIELDS %}<option value="{{ f }}" {{ 'selected' if field==f }}>{{ FIELD_LABELS[f] }}</option>{% endfor %}
     </select>
-    <input class="search" type="search" name="kw" value="{{ kw }}" placeholder="포함할 문자 (LIKE)">
-    <select name="pat" style="max-width:130px" title="패턴 유무">
-      <option value="all" {{ 'selected' if pat=='all' }}>패턴 전체</option>
-      <option value="has" {{ 'selected' if pat=='has' }}>패턴 있음</option>
-      <option value="none" {{ 'selected' if pat=='none' }}>패턴 없음</option>
+    <input class="search" type="search" name="q" value="{{ q }}" placeholder="포함할 문자 (LIKE)">
+    <select name="pat" style="max-width:150px">
+      <option value="all" {{ 'selected' if pat=='all' }}>규칙 전체</option>
+      <option value="multi" {{ 'selected' if pat=='multi' }}>규칙 2개 이상</option>
+      <option value="single" {{ 'selected' if pat=='single' }}>규칙 1개</option>
     </select>
     <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="dir" value="{{ dir }}">
     <button class="btn btn-ghost" type="submit">검색</button>
-    {% if kw or pat!='all' %}<a class="btn btn-ghost" href="{{ url_for('monitor') }}">초기화</a>{% endif %}
+    {% if q or pat!='all' %}<a class="btn btn-ghost" href="{{ url_for('monitor') }}">초기화</a>{% endif %}
   </form>
   <span class="spacer"></span>
   {% if current_role=='admin' %}
-    <button id="btnPattern" class="btn btn-primary" type="button" onclick="openModal()" {{ 'disabled' if total==0 }}>패턴 등록하기</button>
+    <button class="btn btn-primary" type="button" onclick="openModal('upsert')" {{ 'disabled' if total==0 }}>규칙 추가/교체</button>
+    <button class="btn btn-danger" type="button" onclick="openModal('delete')" {{ 'disabled' if total==0 }}>규칙 삭제</button>
   {% endif %}
-  <a class="btn btn-outline" href="{{ url_for('export_csv', field=field, kw=kw, pat=pat, sort=sort, dir=dir) }}">CSV 내보내기</a>
-  <a class="btn btn-outline" href="{{ url_for('export_xlsx', field=field, kw=kw, pat=pat, sort=sort, dir=dir) }}">Excel 내보내기</a>
+  <a class="btn btn-outline" href="{{ url_for('export_csv', field=field, q=q, pat=pat, sort=sort, dir=dir) }}">CSV 내보내기</a>
+  <a class="btn btn-outline" href="{{ url_for('export_xlsx', field=field, q=q, pat=pat, sort=sort, dir=dir) }}">Excel 내보내기</a>
 </div>
 
 <div class="tbl-wrap">
   <table>
     <thead>
       <tr>
-        {% set ex = {'field': field, 'kw': kw, 'pat': pat} %}
+        {% set ex = {'field': field, 'q': q, 'pat': pat} %}
         {% if current_role=='admin' %}<th style="width:36px"><input type="checkbox" id="chkAll" onclick="toggleAll(this)" style="width:17px;height:17px;accent-color:var(--orange)"></th>{% endif %}
         {{ sortth('monitor', sort, dir, 'hostname', '호스트네임', ex) }}
         {{ sortth('monitor', sort, dir, 'ip', 'IP', ex) }}
         {{ sortth('monitor', sort, dir, 'department', '부서', ex) }}
-        {{ sortth('monitor', sort, dir, 'name', '이름', ex) }}
-        {{ sortth('monitor', sort, dir, 'phone', '핸드폰번호', ex) }}
-        {{ sortth('monitor', sort, dir, 'DAY', '주간', ex) }}
-        {{ sortth('monitor', sort, dir, 'NIGHT', '야간', ex) }}
-        {{ sortth('monitor', sort, dir, 'keyword', '패턴', ex) }}
+        {{ sortth('monitor', sort, dir, 'rules', '수신 규칙 · 담당자 (정 → 부)', ex) }}
       </tr>
     </thead>
     <tbody>
       {% for h in hosts %}
       <tr>
-        {% if current_role=='admin' %}<td><input type="checkbox" class="rowchk" value="{{ h.hostname }}"
-              data-kw='{{ h.keyword|tojson }}' onclick="updateSel()" style="width:17px;height:17px;accent-color:var(--orange)"></td>{% endif %}
+        {% if current_role=='admin' %}<td><input type="checkbox" class="rowchk" value="{{ h.hostname }}" onclick="updateSel()"
+              style="width:17px;height:17px;accent-color:var(--orange)"></td>{% endif %}
         <td class="mono"><strong>{{ h.hostname }}</strong></td>
         <td class="mono">{{ h.ip }}</td>
         <td>{{ h.department }}</td>
-        <td>{{ h.name }}</td>
-        <td class="mono">{{ h.phone }}</td>
-        <td><span class="yn {{ 'y' if h.DAY=='Y' else 'n' }}">{{ h.DAY }}</span></td>
-        <td><span class="yn {{ 'y' if h.NIGHT=='Y' else 'n' }}">{{ h.NIGHT }}</span></td>
-        <td>{% if h.keyword %}<button type="button" class="btn btn-ghost btn-sm" onclick='viewPatterns({{ h.hostname|tojson }}, {{ h.keyword|tojson }})'>패턴 {{ h.keyword|length }}개</button>{% else %}<span style="color:#c2c7cf">-</span>{% endif %}</td>
+        <td>{{ rule_summary(h) }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="{{ 8 + (1 if current_role=='admin' else 0) }}" class="empty">조회 결과가 없습니다.</td></tr>
+      <tr><td colspan="{{ 4 + (1 if current_role=='admin' else 0) }}" class="empty">조회 결과가 없습니다.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-{{ pager('monitor', page, pages, {'field': field, 'kw': kw, 'pat': pat, 'sort': sort, 'dir': dir}) }}
+{{ pager('monitor', page, pages, {'field': field, 'q': q, 'pat': pat, 'sort': sort, 'dir': dir}) }}
 
 {% if current_role=='admin' %}
 <div class="modal-bg" id="modal">
-  <div class="modal">
-    <h2>패턴 등록 · 삭제</h2>
+  <div class="modal" style="width:860px">
+    <h2 id="modalTitle">규칙 추가/교체</h2>
     <div class="body">
       <div class="field" style="margin-bottom:14px">
         <label>적용 범위</label>
         <div class="checkrow" style="gap:18px">
-          <label><input type="radio" name="scope" value="selected" checked onchange="onScope()"> 선택한 <span id="scSel">0</span>개</label>
-          <label><input type="radio" name="scope" value="filtered" onchange="onScope()"> 검색결과 전체 {{ total }}개</label>
+          <label><input type="radio" name="scope" value="selected" checked> 선택한 <span id="scSel">0</span>대</label>
+          <label><input type="radio" name="scope" value="filtered"> 검색결과 전체 {{ total }}대</label>
         </div>
       </div>
-      <div class="field" style="margin-bottom:16px">
-        <label>패턴 추가</label>
-        <div style="display:flex;gap:8px">
-          <input type="text" id="newPattern" placeholder="예: error (Enter 또는 추가)" onkeydown="if(event.key==='Enter'){event.preventDefault();addPattern();}">
-          <button class="btn btn-outline" type="button" onclick="addPattern()">추가</button>
-        </div>
-        <div id="pendingAdds" style="margin-top:8px"></div>
-        <div class="hint">위 범위의 서버에 일괄 추가됩니다. 이미 있는 패턴은 자동 무시됩니다.</div>
+      <div id="upsertArea">
+        <p class="sub" style="margin-bottom:10px">같은 이름의 규칙이 있는 서버는 <strong>교체</strong>, 없으면 <strong>추가</strong>합니다.
+          {% if rule_names %}불러오기:
+          <select id="loadName" style="width:auto;display:inline-block;padding:4px 8px">
+            <option value="">기존 규칙명 선택</option>{% for n in rule_names %}<option>{{ n }}</option>{% endfor %}
+          </select>{% endif %}</p>
+        <div id="ruleEditor"></div>
       </div>
-      <div class="field" id="removeArea">
-        <label>선택한 서버의 현재 패턴 (줄별 삭제 가능)</label>
-        <div id="existingList" style="margin-top:6px"></div>
-        <div class="hint" id="filteredNote" style="display:none;color:var(--warn)">전체 적용 시 추가만 반영되며, 삭제는 개별 선택 시에만 가능합니다.</div>
+      <div id="deleteArea" style="display:none">
+        <div class="field">
+          <label>삭제할 규칙명</label>
+          <input type="text" id="delName" list="ruleNames" placeholder="예: DBA" style="max-width:300px">
+          <datalist id="ruleNames">{% for n in rule_names %}<option value="{{ n }}">{% endfor %}</datalist>
+          <div class="hint" style="color:var(--muted);font-size:12px;margin-top:6px">대상 서버에서 이 이름의 규칙을 삭제합니다. 서버에 규칙이 하나뿐이면 삭제하지 않습니다.</div>
+        </div>
       </div>
     </div>
     <div class="foot">
       <button class="btn btn-ghost" type="button" onclick="closeModal()">취소</button>
-      <button class="btn btn-primary" type="button" onclick="submitPatterns()">적용</button>
+      <button class="btn btn-primary" type="button" id="btnApply" onclick="submitRules()">적용</button>
     </div>
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='rules.js') }}"></script>
 <script>
-let pendingAdds = [], pendingRemove = {};
-const FILTER = {field:{{ field|tojson }}, kw:{{ kw|tojson }}, pat:{{ pat|tojson }}};
+const FILTER = {field:{{ field|tojson }}, q:{{ q|tojson }}, pat:{{ pat|tojson }}};
+const editor = RuleEditor.mount(document.getElementById('ruleEditor'), [{ ...RuleEditor.blankRule(), name: '' }],
+  { single: true, metrics: {{ metrics|tojson }}, contacts: {{ contacts|tojson }} });
+let action = 'upsert';
 function selectedRows(){ return Array.from(document.querySelectorAll('.rowchk:checked')); }
-function curScope(){ const r=document.querySelector('input[name="scope"]:checked'); return r?r.value:'selected'; }
-function updateSel(){
-  const n=selectedRows().length;
-  document.getElementById('scSel').textContent=n;
-}
+function curScope(){ return document.querySelector('input[name="scope"]:checked').value; }
+function updateSel(){ document.getElementById('scSel').textContent = selectedRows().length; }
 function toggleAll(cb){ document.querySelectorAll('.rowchk').forEach(c=>c.checked=cb.checked); updateSel(); }
-function openModal(){
-  pendingAdds=[]; pendingRemove={};
-  document.getElementById('newPattern').value='';
-  document.getElementById('pendingAdds').innerHTML='';
-  const n=selectedRows().length;
-  document.getElementById('scSel').textContent=n;
-  // 선택이 없으면 자동으로 '검색결과 전체'
-  document.querySelector('input[name="scope"][value="selected"]').disabled=(n===0);
-  if(n===0){ document.querySelector('input[name="scope"][value="filtered"]').checked=true; }
-  else { document.querySelector('input[name="scope"][value="selected"]').checked=true; }
-  onScope();
+function openModal(a){
+  action = a;
+  document.getElementById('modalTitle').textContent = a==='delete' ? '규칙 삭제' : '규칙 추가/교체';
+  document.getElementById('upsertArea').style.display = a==='delete' ? 'none' : '';
+  document.getElementById('deleteArea').style.display = a==='delete' ? '' : 'none';
+  document.getElementById('btnApply').className = 'btn ' + (a==='delete' ? 'btn-danger' : 'btn-primary');
+  const n = selectedRows().length; updateSel();
+  const selRadio = document.querySelector('input[name="scope"][value="selected"]');
+  selRadio.disabled = (n===0);
+  document.querySelector(`input[name="scope"][value="${n===0 ? 'filtered' : 'selected'}"]`).checked = true;
   document.getElementById('modal').classList.add('open');
-  setTimeout(()=>document.getElementById('newPattern').focus(),50);
-}
-function onScope(){
-  const filtered = curScope()==='filtered';
-  document.getElementById('removeArea').style.opacity = filtered? '.5':'1';
-  document.getElementById('filteredNote').style.display = filtered? 'block':'none';
-  renderExisting();
 }
 function closeModal(){ document.getElementById('modal').classList.remove('open'); }
-function refreshAdds(){
-  document.getElementById('pendingAdds').innerHTML =
-    pendingAdds.map((p,i)=>`<span class="chip">${escapeHtmlG(p)} <span style="cursor:pointer;font-weight:800" onclick="removePending(${i})">×</span></span>`).join('');
-}
-function addPattern(){
-  const v=document.getElementById('newPattern').value.trim();
-  if(v && !pendingAdds.includes(v)) pendingAdds.push(v);
-  document.getElementById('newPattern').value=''; refreshAdds();
-}
-function removePending(i){ pendingAdds.splice(i,1); refreshAdds(); }
-function renderExisting(){
-  const rows=selectedRows();
-  if(curScope()==='filtered'){
-    document.getElementById('existingList').innerHTML='<div style="color:#c2c7cf">전체 적용 모드 — 개별 삭제 비활성화</div>';
-    return;
+const loadSel = document.getElementById('loadName');
+if (loadSel) loadSel.addEventListener('change', () => {
+  const r = editor.getRules()[0]; r.name = loadSel.value || r.name; editor.setRules([r]);
+});
+function submitRules(){
+  const scope = curScope();
+  const body = { action, scope, hostnames: selectedRows().map(r=>r.value), field: FILTER.field, q: FILTER.q, pat: FILTER.pat };
+  if (action === 'delete') {
+    body.rule_name = document.getElementById('delName').value.trim();
+    if (!body.rule_name) { alert('삭제할 규칙명을 입력하세요.'); return; }
+  } else {
+    body.rule = editor.getRules()[0];
   }
-  let html='';
-  rows.forEach(r=>{
-    const host=r.value, kws=JSON.parse(r.getAttribute('data-kw')||'[]');
-    const removed=pendingRemove[host]||[];
-    const remain=kws.filter(k=>!removed.includes(k));
-    if(remain.length===0){ html+=`<div class="kwline"><span class="host">${escapeHtmlG(host)}</span><span class="pat" style="color:#c2c7cf">패턴 없음</span></div>`; }
-    else remain.forEach(k=>{ html+=`<div class="kwline"><span class="host">${escapeHtmlG(host)}</span><span class="pat"><span class="chip">${escapeHtmlG(k)}</span></span><button class="x" type="button" onclick="markRemove('${encodeURIComponent(host)}','${encodeURIComponent(k)}')">×</button></div>`; });
-  });
-  document.getElementById('existingList').innerHTML = html || '<div style="color:#c2c7cf">선택된 서버가 없습니다.</div>';
-}
-function markRemove(host,pat){ host=decodeURIComponent(host); pat=decodeURIComponent(pat);
-  if(!pendingRemove[host]) pendingRemove[host]=[]; if(!pendingRemove[host].includes(pat)) pendingRemove[host].push(pat); renderExisting(); }
-function submitPatterns(){
-  if(document.getElementById('newPattern').value.trim()) addPattern();
-  const scope=curScope();
-  const body={add:pendingAdds, remove:(scope==='filtered'?{}:pendingRemove), scope:scope,
-              hostnames:selectedRows().map(r=>r.value), field:FILTER.field, kw:FILTER.kw, pat:FILTER.pat};
-  if(scope==='selected' && body.hostnames.length===0 && Object.keys(body.remove).length===0){ alert('서버를 선택하거나 전체 적용을 선택하세요.'); return; }
-  if(pendingAdds.length===0 && Object.keys(body.remove).length===0){ alert('추가하거나 삭제할 패턴이 없습니다.'); return; }
-  fetch('{{ url_for("monitor_patterns") }}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-    .then(r=>r.json()).then(d=>{ if(d.ok) location.reload(); else alert(d.msg||'실패'); }).catch(()=>alert('요청 실패'));
+  const cnt = scope==='filtered' ? {{ total }} : body.hostnames.length;
+  const what = action==='delete' ? `'${body.rule_name}' 규칙을 삭제` : `'${body.rule.name}' 규칙을 추가/교체`;
+  if (!confirm(`${cnt}대 서버에 ${what}합니다. 계속할까요?`)) return;
+  fetch('{{ url_for("monitor_rules") }}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(r=>r.json()).then(d=>{
+      if (d.ok) { alert(`${d.changed}대 반영${d.skipped && d.skipped.length ? `\n건너뜀(마지막 규칙): ${d.skipped.join(', ')}` : ''}`); location.reload(); }
+      else alert(d.msg||'실패');
+    }).catch(()=>alert('요청 실패'));
 }
 document.addEventListener('click', e=>{ if(e.target && e.target.id==='modal') closeModal(); });
 </script>

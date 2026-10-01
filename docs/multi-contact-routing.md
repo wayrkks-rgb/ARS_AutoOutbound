@@ -4,8 +4,10 @@
 1. 한 서버(hostname)의 이벤트도 **metric 에 따라 담당자가 다름**
    (예: DB 서버 OS Down → `가용성` 은 OS 담당, `SQL Server Error Log`·DB 프로세스 Down 은 DBA)
 2. 한 이벤트에 **여러 담당 그룹이 매칭되면 모두에게 동시에** 발신
-3. 담당자가 받지 않으면 **최대 2회 재발신(총 3회)**, 그래도 안 받으면 **다음 담당자(부담당자)** 에게 발신
-4. 콜백 식별은 `event_id`(이벤트 적재 idx) 기준 — `id` 아님
+3. 담당자가 받지 않으면 **60초 간격 최대 2회 재발신(총 3회)**, 그래도 안 받으면 **60초 뒤 다음 담당자(부담당자)** 에게 같은 방식으로 발신
+4. 무응답 / 통화중 / 받았지만 확인 버튼 미입력 → **모두 미응답**
+5. 발신 기준: 기본은 event_cd **"심각"** 만. 로그 패턴(memo 키워드)이나 '등급 무관' 규칙은 등급과 상관없이 발신(1순위)
+6. 콜백 식별은 `event_id`(이벤트 적재 idx) 기준 — `id` 아님
 
 ## 전체 흐름
 
@@ -76,27 +78,51 @@ SQL: [`db/001_multi_contact_routing.sql`](../db/001_multi_contact_routing.sql) (
 - `DAY`/`NIGHT` 는 규칙 단위(현재 서버 단위에서 이동)
 - 기존 데이터 이전: 서버마다 `{"name":"기본","metrics":["*"], 기존 DAY/NIGHT, contacts:[기존 담당자]}` 1개로 자동 변환
 
-## 바꿔야 할 코드
+## 규칙 매칭 순서 (relayServer/core/Router.js)
 
-**Node (relayServer)**
-- `adapter.fetchAndLock` → 이벤트 배정(dispatch)으로 변경:
-  `pending` 이벤트를 `dispatched` 로 잠그고 → 규칙 매칭 → `outbound_call` INSERT(체인별 1번 `pending`, 나머지 `standby`)를 **한 트랜잭션**으로. 매칭 0건이면 `no_route`
-- 폴링: `usp_outbound_call_claim` 결과를 큐에 적재. 같은 **번호+호스트** 건은 지금처럼 한 통화로 묶음(bundle)
-- `check-event` 응답의 IVR 콜백 식별값을 **`call_id`** 로 (아래 확인사항 1)
-- `call-done` / `call-failed` → 묶인 call_id 마다 SP 호출
-- 기동 시 + 주기적으로 `usp_outbound_call_recover`
-- 기존 버그 해소: 실패 건이 `phone IS NULL` 조건에 걸려 재발신되지 않던 문제, `id`/`event_id` 혼용
+1. 이벤트 hostname 의 규칙 중 **metric 을 지정했거나 memo 키워드가 있는 규칙**을 모두 확인
+   → metric 일치 + 키워드 일치 + 주간/야간(이벤트 발생 시각 기준) + 등급(any_level=N 이면 "심각"만) 을 만족하는 규칙 **전부** 발신
+2. 1에서 하나도 없으면 **`*` 기본 규칙** — "심각"만, 로그 감시(`sys_id = '시스템 로그 감시'`) 이벤트는 제외 (기존 필터 그대로)
+3. 둘 다 없으면 이벤트 상태 `no_route` (대시보드 '대상 없음')
 
-**웹 (hostRegistry)**
-- 서버 정보(hostname/IP/부서)와 **수신 규칙(메트릭·주야간·담당자 순서)** 편집 화면 분리
-- 일괄등록 양식에 `rule_name, metrics, contact_seq` 열 추가
-- metric 입력 시 실제 metric 목록 자동완성(첨부 목록 기반)
-- `대시보드(dashboard-server.js)` 는 `v_outbound_call_history` 기준으로 조회 변경
+## IVR 콜백 키: event_id vs call_id
 
-## 확인 필요
-1. IVR 시나리오가 콜백 `$event-id$` 에 **어떤 응답 필드를 되돌려 주는지**. 한 이벤트에 여러 명이 동시에 걸리므로 `event_id` 만으로는 어느 통화인지 구분이 안 됨 → `call_id` 를 돌려받도록 시나리오 수정 가능한지
-2. **재발신 간격**(SQL 기본값 180초) 과 다음 담당자로 넘어갈 때 대기 시간(현재 즉시)
-3. 어떤 IVR 결과를 "미응답"으로 볼지(무응답 / 통화중 / 받았지만 확인 버튼 미입력 …)
-4. 현재 keyword 가 없을 때 적용되는 `event_cd = '심각' AND sys_id <> '시스템 로그 감시'` 필터를 유지할지.
-   유지하면 **로그 감시 이벤트가 전부 제외**되어 로그별 담당자 지정이 의미가 없어짐
-5. 이벤트 상태 `partial`(일부 체인만 수신) 을 대시보드에서 성공/실패 중 어디로 셀지
+| | `IVR_CALLBACK_KEY=event_id` (기본, 현재 IVR 그대로) | `IVR_CALLBACK_KEY=call_id` |
+|---|---|---|
+| IVR 시나리오 | 변경 없음 (`$event-id$` 에 event_id 를 돌려줌) | 응답의 `call_id` 를 `$event-id$` 로 돌려주도록 변경 |
+| 같은 이벤트에 담당 그룹 2개 이상 | **한 번에 1통화씩** (앞 통화 결과가 온 뒤 다음 그룹 발신) | **동시에** 발신 |
+| 서로 다른 이벤트 (OS 다운 → 가용성 / DB 프로세스 다운) | 동시에 발신 | 동시에 발신 |
+
+check-event 응답에는 두 값(`event_id`, `call_id`)이 모두 들어갑니다. IVR 시나리오가 바뀌면 `.env` 의 값만 바꾸면 됩니다.
+
+## relayServer 설정 (.env, 모두 선택)
+
+| 키 | 기본값 | 설명 |
+|---|---|---|
+| `IVR_CALLBACK_KEY` | `event_id` | 위 표 참고 |
+| `RETRY_INTERVAL_SEC` | `60` | 같은 담당자 재발신 간격 |
+| `ESCALATE_DELAY_SEC` | `60` | 3회 미응답 후 다음 담당자 발신까지 대기 |
+| `SEVERITY_LEVEL` | `심각` | 등급 무관이 아닌 규칙이 발신하는 event_cd |
+| `LOG_SYS_ID` | `시스템 로그 감시` | 기본(`*`) 규칙에서 제외할 로그 감시 sys_id |
+| `EVENT_WINDOW_HOURS` | `3` | 이 시간 이내 발생 이벤트만 배정 |
+| `DAY_START_HOUR` / `DAY_END_HOUR` | `9` / `18` | 주간 시간대 |
+| `RECOVER_TIMEOUT_MIN` | `10` | IVR 결과가 이 시간 안에 안 오면 미응답(timeout) 처리 |
+| `DISPATCH_BATCH` | `100` | 폴링 1회 배정 최대 이벤트 수 |
+| `DASHBOARD_PORT` / `DASHBOARD_ENABLED` | `8080` / `Y` | 발신 현황 대시보드 |
+| `HOST_DATA_FILE` | `<repo>/hostRegistry/data/hosts.json` | 규칙 파일 (웹과 같은 경로) |
+
+## 대시보드 (relayServer, 기본 http://서버:8080)
+
+- 오늘 이벤트: 성공(전원 수신) / 일부 수신 / 실패(아무도 미수신) / 진행 중 / 대상 없음
+- 오늘 발신: 담당자 기준 발신 건, 수신, 3회 미응답, 총 전화 시도 수
+- 최근 30일 일별 결과 그래프 (외부 CDN 없이 동작 — 폐쇄망 OK)
+- **이벤트별 현황**: 이벤트마다 담당자·상태 요약 → 클릭 시 규칙/순위/번호/시도 이력 상세
+- **발신 이력**: 누구에게, 어떤 번호로, 어떤 이벤트(metric·event_id·등급)에 대해, 결과(수신/재발신 대기/3회 미응답/취소)와 시도 횟수
+
+## 적용 순서
+
+1. DB: `db/001_multi_contact_routing.sql` 실행 (되돌리기: `001_multi_contact_routing_rollback.sql`)
+2. 기존 `hosts.json` 을 `hostRegistry/data/hosts.json` 으로 복사 → 웹(`run_server.py`) 첫 기동 시 규칙 구조로 자동 변환(.bak 보관)
+3. relayServer 재기동 (교체 시점에 이전 코드가 `processing` 으로 잡고 있던 건은 이전 방식대로 남음)
+4. 웹에서 서버별 OS/DBA 등 규칙과 부담당자 등록 (또는 [규칙 일괄적용] / 일괄등록 파일)
+5. IVR 시나리오에서 무응답·통화중·확인 버튼 미입력을 모두 `call-failed` 로 보내는지 확인

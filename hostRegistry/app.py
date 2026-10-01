@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-서버 연락처 / 모니터링 패턴 등록 시스템
+서버 연락처 / 수신 규칙 등록 시스템
 - Python 3.13 / Flask / waitress / openpyxl
-- WAS 와 같은 머신, Node.js 가 읽는 JSON 을 로컬 경로에 원자적 기록 (Node 는 읽기만)
-- 로그인 + 권한(admin/viewer) / 서버등록 / 일괄등록 / 모니터링등록 / 계정관리 / 변경이력
-- 레코드: hostname, ip, department, name, phone, DAY(Y/N), NIGHT(Y/N), keyword(배열)
+- WAS 와 같은 머신, Node.js(relayServer) 가 읽는 JSON 을 로컬 경로에 원자적 기록 (Node 는 읽기만)
+- 로그인 + 권한(admin/viewer) / 서버등록 / 일괄등록 / 규칙 일괄적용 / 계정관리 / 변경이력
+- 레코드: hostname, ip, department, rules[]
+    rule: id, name, metrics[], keywords[], any_level(Y/N), DAY(Y/N), NIGHT(Y/N), contacts[{name, phone}]
+    · metrics  : 관제 metric 이름 또는 '*' 와일드카드 (['*'] = 기본 규칙: 다른 규칙이 안 맞을 때만)
+    · keywords : memo 포함 문자열 (있으면 등급 무관 발신)
+    · contacts : 순서 = 정담당 → 부담당 … (각자 최대 3회, 미응답 시 다음 사람)
 """
 
 import csv
@@ -43,6 +47,9 @@ SERVER_PORT = int(os.environ.get("SERVER_PORT", "8458"))  # Node 와 다른 포�
 
 USERS_FILE = os.environ.get("USERS_FILE", os.path.join(BASE_DIR, "data", "users.json"))
 AUDIT_FILE = os.environ.get("AUDIT_FILE", os.path.join(BASE_DIR, "data", "audit.jsonl"))
+# 규칙 입력 시 metric 자동완성 목록 (한 줄에 하나)
+METRIC_CATALOG_FILE = os.environ.get("METRIC_CATALOG_FILE",
+                                     os.path.join(BASE_DIR, "data", "metric_catalog.txt"))
 
 PAGE_SIZE = 50
 ALLOWED_EXT = {".csv", ".xlsx"}
@@ -53,17 +60,21 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 SECRET_FILE = os.path.join(BASE_DIR, "data", "secret.key")
 
-CORE_FIELDS = ["hostname", "ip", "department", "name", "phone"]
+HOST_FIELDS = ["hostname", "ip", "department"]
+CONTACT_FIELDS = ["name", "phone"]
 FLAG_FIELDS = ["DAY", "NIGHT"]
-SORT_FIELDS = CORE_FIELDS + FLAG_FIELDS + ["keyword"]
-SEARCH_FIELDS = CORE_FIELDS
+CORE_FIELDS = HOST_FIELDS                      # (템플릿 호환)
+SEARCH_FIELDS = HOST_FIELDS + CONTACT_FIELDS + ["rule", "metric"]
+SORT_FIELDS = HOST_FIELDS + ["rules"]
 FIELD_LABELS = {
-    "hostname": "호스트네임", "ip": "IP", "department": "부서", "name": "이름",
-    "phone": "핸드폰번호", "DAY": "주간", "NIGHT": "야간", "keyword": "패턴",
+    "hostname": "호스트네임", "ip": "IP", "department": "부서", "name": "담당자", "phone": "핸드폰번호",
+    "DAY": "주간", "NIGHT": "야간", "rules": "수신 규칙", "rule": "규칙명", "metric": "metric",
+    "keyword": "memo 키워드", "any_level": "등급 무관",
 }
 ACTION_LABELS = {
     "login": "로그인", "logout": "로그아웃", "add": "서버추가", "edit": "서버수정",
-    "delete": "서버삭제", "import": "일괄등록", "monitor_patterns": "패턴변경",
+    "delete": "서버삭제", "import": "일괄등록", "rules_bulk": "규칙 일괄적용",
+    "export_csv": "CSV 내보내기", "export_xlsx": "Excel 내보내기",
     "user_add": "계정생성", "user_role": "권한변경", "user_reset": "비번초기화",
     "user_delete": "계정삭제", "change_password": "비번변경",
 }
@@ -90,6 +101,8 @@ def _load_or_create_secret():
 app.secret_key = _load_or_create_secret()
 
 
+
+
 # ===========================================================================
 #  저장소
 # ===========================================================================
@@ -107,18 +120,53 @@ def _atomic_write_json(path, data):
         raise
 
 
+def _yn(v):
+    return "Y" if str(v or "").strip().upper() == "Y" else "N"
+
+
+def _to_list(v, sep=";"):
+    if isinstance(v, list):
+        return [str(x).strip() for x in v if str(x).strip()]
+    if isinstance(v, str):
+        return [x.strip() for x in re.split(rf"[{sep}\n]", v) if x.strip()]
+    return []
+
+
+def new_rule_id():
+    return "r" + secrets.token_hex(3)
+
+
+def _normalize_rule(r, idx=0):
+    contacts = []
+    for c in r.get("contacts", []) or []:
+        phone = normalize_phone(str(c.get("phone", "")))
+        if phone:
+            contacts.append({"name": str(c.get("name", "") or "").strip(), "phone": phone})
+    keywords = _to_list(r.get("keywords", r.get("keyword", [])))
+    metrics = _to_list(r.get("metrics", [])) or ["*"]
+    return {
+        "id": str(r.get("id") or f"r{idx + 1}"),
+        "name": str(r.get("name", "") or "").strip() or f"규칙{idx + 1}",
+        "metrics": metrics,
+        "keywords": keywords,
+        "any_level": "Y" if keywords else _yn(r.get("any_level")),
+        "DAY": _yn(r.get("DAY")),
+        "NIGHT": _yn(r.get("NIGHT")),
+        "contacts": contacts,
+    }
+
+
 def _normalize_record(r):
-    out = {f: str(r.get(f, "") or "").strip() for f in CORE_FIELDS}
-    for f in FLAG_FIELDS:
-        out[f] = "Y" if str(r.get(f, "")).strip().upper() == "Y" else "N"
-    kw = r.get("keyword", [])
-    if isinstance(kw, str):
-        kw = [p.strip() for p in kw.split(";") if p.strip()] if kw else []
-    elif isinstance(kw, list):
-        kw = [str(p).strip() for p in kw if str(p).strip()]
+    """기존 단일 담당자 레코드(name/phone/DAY/NIGHT/keyword)는 '기본' 규칙 1개로 변환"""
+    out = {f: str(r.get(f, "") or "").strip() for f in HOST_FIELDS}
+    if isinstance(r.get("rules"), list):
+        rules = r["rules"]
     else:
-        kw = []
-    out["keyword"] = kw
+        kw = _to_list(r.get("keyword", []))
+        rules = [{"id": "default", "name": "기본", "metrics": ["*"], "keywords": kw,
+                  "any_level": "Y" if kw else "N", "DAY": r.get("DAY"), "NIGHT": r.get("NIGHT"),
+                  "contacts": [{"name": r.get("name", ""), "phone": r.get("phone", "")}]}]
+    out["rules"] = [_normalize_rule(x, i) for i, x in enumerate(rules)]
     return out
 
 
@@ -138,6 +186,7 @@ def save_hosts(data):
 
 
 def migrate_existing():
+    """기존 hosts.json(서버당 담당자 1명) → 규칙 구조로 1회 변환. 원본은 .bak 으로 보관"""
     if not os.path.exists(HOST_DATA_FILE):
         return
     try:
@@ -145,10 +194,19 @@ def migrate_existing():
             raw = json.load(f)
     except (json.JSONDecodeError, OSError):
         return
-    if isinstance(raw, list) and any(
-            not all(k in r for k in (FLAG_FIELDS + ["keyword"])) for r in raw):
+    if isinstance(raw, list) and any(not isinstance(r.get("rules"), list) for r in raw):
         with _hosts_lock:
+            backup = f"{HOST_DATA_FILE}.{datetime.now():%Y%m%d_%H%M%S}.bak"
+            _atomic_write_json(backup, raw)
             save_hosts([_normalize_record(r) for r in raw])
+
+
+def load_metric_catalog():
+    try:
+        with open(METRIC_CATALOG_FILE, "r", encoding="utf-8") as f:
+            return [line.strip() for line in f if line.strip()]
+    except OSError:
+        return []
 
 
 def load_users():
@@ -191,10 +249,12 @@ def audit(action, target="", detail=None):
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+
 # ===========================================================================
 #  검증 / 조회
 # ===========================================================================
 PHONE_RE = re.compile(r"^010\d{8}$")
+IP_RE = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$")
 
 
 def normalize_phone(raw):
@@ -203,6 +263,11 @@ def normalize_phone(raw):
 
 def is_valid_phone(d):
     return bool(PHONE_RE.match(d))
+
+
+def is_valid_ip(ip):
+    m = IP_RE.match(ip or "")
+    return bool(m) and all(0 <= int(x) <= 255 for x in m.groups())
 
 
 def find_host(hosts, hostname):
@@ -223,39 +288,92 @@ def find_by_ip(hosts, ip, exclude_hostname=None):
     return None
 
 
-def contact_conflicts(hosts, department, name, phone, exclude_hostname=None):
-    out, excl = [], (exclude_hostname or "").strip().lower()
+def all_contacts(host):
+    for r in host.get("rules", []):
+        for c in r.get("contacts", []):
+            yield r, c
+
+
+def contact_conflicts(hosts, rules, exclude_hostname=None):
+    """같은 이름인데 다른 번호로 등록된 담당자 (오타 확인용 경고)"""
+    excl = (exclude_hostname or "").strip().lower()
+    known = {}
     for h in hosts:
         if h.get("hostname", "").strip().lower() == excl:
             continue
-        if (h.get("department", "").strip() == (department or "").strip()
-                and h.get("name", "").strip() == (name or "").strip()
-                and h.get("phone", "") != phone):
-            out.append(h)
+        for _, c in all_contacts(h):
+            if c["name"]:
+                known.setdefault(c["name"], {}).setdefault(c["phone"], h["hostname"])
+    out = []
+    for r in rules:
+        for c in r["contacts"]:
+            others = {p: hn for p, hn in known.get(c["name"], {}).items() if p != c["phone"]}
+            for p, hn in others.items():
+                out.append({"name": c["name"], "phone": c["phone"], "other_phone": p, "other_host": hn})
     return out
 
 
-def validate_core(rec):
+def validate_host(rec):
     errors, out = [], {}
-    for f in CORE_FIELDS:
-        v = (rec.get(f) or "").strip()
-        out[f] = v
-        if not v:
+    for f in HOST_FIELDS:
+        out[f] = (rec.get(f) or "").strip()
+        if not out[f]:
             errors.append(f"{FIELD_LABELS[f]} 누락")
-    out["phone"] = normalize_phone(out.get("phone", ""))
-    if out["phone"] and not is_valid_phone(out["phone"]):
-        errors.append("핸드폰번호 형식 오류(010으로 시작하는 11자리)")
-    for f in FLAG_FIELDS:
-        out[f] = "Y" if str(rec.get(f, "")).strip().upper() == "Y" else "N"
+    if out["ip"] and not is_valid_ip(out["ip"]):
+        errors.append("IP 형식 오류(IPv4)")
     return errors, out
+
+
+def validate_rules(raw_rules, prefix=""):
+    """규칙 목록 검증 → (errors, 정규화된 rules)"""
+    errors, rules, names = [], [], set()
+    if not isinstance(raw_rules, list) or not raw_rules:
+        return [f"{prefix}수신 규칙이 최소 1개 필요합니다."], []
+    for i, r in enumerate(raw_rules):
+        label = f"{prefix}규칙 {i + 1}"
+        name = str(r.get("name", "") or "").strip()
+        if not name:
+            errors.append(f"{label}: 규칙명 누락")
+        elif name.lower() in names:
+            errors.append(f"{label}: 규칙명 '{name}' 중복")
+        names.add(name.lower())
+        contacts = []
+        for j, c in enumerate(r.get("contacts", []) or []):
+            cname = str(c.get("name", "") or "").strip()
+            phone = normalize_phone(str(c.get("phone", "") or ""))
+            if not cname and not phone:
+                continue
+            if not cname:
+                errors.append(f"{label} 담당자 {j + 1}: 이름 누락")
+            if not is_valid_phone(phone):
+                errors.append(f"{label} 담당자 {j + 1}: 핸드폰번호 형식 오류(010으로 시작하는 11자리)")
+            contacts.append({"name": cname, "phone": phone})
+        if not contacts:
+            errors.append(f"{label}: 담당자가 최소 1명 필요합니다.")
+        nr = _normalize_rule({**r, "contacts": contacts}, i)
+        nr["contacts"] = contacts
+        if not r.get("id"):
+            nr["id"] = new_rule_id()
+        rules.append(nr)
+    return errors, rules
+
+
+def is_catch_all(rule):
+    return all(m.strip() in ("", "*") for m in rule["metrics"]) and not rule["keywords"]
+
+
+def host_flags(host):
+    rules = host.get("rules", [])
+    return {"DAY": "Y" if any(r["DAY"] == "Y" for r in rules) else "N",
+            "NIGHT": "Y" if any(r["NIGHT"] == "Y" for r in rules) else "N"}
 
 
 def sort_hosts(hosts, sort, direction):
     if sort not in SORT_FIELDS:
         sort = "hostname"
     rev = (direction == "desc")
-    if sort == "keyword":
-        key = lambda h: len(h.get("keyword", []))
+    if sort == "rules":
+        key = lambda h: len(h.get("rules", []))
     elif sort == "ip":
         def key(h):
             try:
@@ -269,19 +387,39 @@ def sort_hosts(hosts, sort, direction):
 
 def summary(hosts):
     return {"total": len(hosts),
-            "with_pattern": sum(1 for h in hosts if h.get("keyword")),
-            "day": sum(1 for h in hosts if h.get("DAY") == "Y"),
-            "night": sum(1 for h in hosts if h.get("NIGHT") == "Y")}
+            "multi": sum(1 for h in hosts if len(h.get("rules", [])) > 1),
+            "contacts": len({c["phone"] for h in hosts for _, c in all_contacts(h)}),
+            "day": sum(1 for h in hosts if host_flags(h)["DAY"] == "Y"),
+            "night": sum(1 for h in hosts if host_flags(h)["NIGHT"] == "Y")}
 
+
+def rule_text(r):
+    flags = "/".join(x for x, f in (("주간", r["DAY"]), ("야간", r["NIGHT"])) if f == "Y") or "발신 안 함"
+    cond = ", ".join(r["metrics"])
+    if r["keywords"]:
+        cond += f" + memo[{', '.join(r['keywords'])}]"
+    who = " → ".join(f"{c['name']}({c['phone']})" for c in r["contacts"])
+    level = "등급무관" if r["any_level"] == "Y" else "심각만"
+    return f"[{r['name']}] {cond} · {flags} · {level} · {who}"
 
 
 def record_detail(rec):
-    d = {FIELD_LABELS[f]: rec.get(f, "") for f in CORE_FIELDS + FLAG_FIELDS}
-    d[FIELD_LABELS["keyword"]] = rec.get("keyword", [])
+    d = {FIELD_LABELS[f]: rec.get(f, "") for f in HOST_FIELDS}
+    d[FIELD_LABELS["rules"]] = [rule_text(r) for r in rec.get("rules", [])]
     return d
+
 
 def distinct_values(hosts, field):
     return sorted({h.get(field, "").strip() for h in hosts if h.get(field, "").strip()})
+
+
+def distinct_contacts(hosts):
+    seen = {}
+    for h in hosts:
+        for _, c in all_contacts(h):
+            if c["name"]:
+                seen.setdefault((c["name"], c["phone"]), None)
+    return [{"name": n, "phone": p} for n, p in sorted(seen)]
 
 
 def paginate(items, page):
@@ -289,6 +427,28 @@ def paginate(items, page):
     page = max(1, min(page, pages))
     s = (page - 1) * PAGE_SIZE
     return items[s:s + PAGE_SIZE], page, pages, len(items)
+
+
+def _page_arg():
+    try:
+        return int(request.args.get("page", 1) or 1)
+    except ValueError:
+        return 1
+
+
+def host_matches(h, field, kw):
+    kw = kw.lower()
+    if field in HOST_FIELDS:
+        return kw in str(h.get(field, "")).lower()
+    if field in CONTACT_FIELDS:
+        if field == "phone":
+            kw = normalize_phone(kw) or kw
+        return any(kw in str(c.get(field, "")).lower() for _, c in all_contacts(h))
+    if field == "rule":
+        return any(kw in r["name"].lower() for r in h.get("rules", []))
+    if field == "metric":
+        return any(kw in m.lower() for r in h.get("rules", []) for m in r["metrics"] + r["keywords"])
+    return any(host_matches(h, f, kw) for f in SEARCH_FIELDS)
 
 
 # ===========================================================================
@@ -344,27 +504,41 @@ def logout():
     return redirect(url_for("login"))
 
 
+
 # ===========================================================================
 #  서버등록 목록
 # ===========================================================================
-def _filter_all(hosts, q):
-    if not q:
+def _search(hosts, field, kw):
+    if not kw:
         return hosts
-    ql = q.lower()
-    return [h for h in hosts if any(ql in str(h.get(f, "")).lower() for f in CORE_FIELDS)]
+    return [h for h in hosts if host_matches(h, field, kw)]
+
+
+def _rule_filter(hosts, pat):
+    if pat == "multi":
+        return [h for h in hosts if len(h.get("rules", [])) > 1]
+    if pat == "single":
+        return [h for h in hosts if len(h.get("rules", [])) <= 1]
+    return hosts
+
+
+def _search_args():
+    field = request.args.get("field", "all").strip()
+    if field not in SEARCH_FIELDS:
+        field = "all"
+    return field, request.args.get("q", "").strip(), request.args.get("pat", "all").strip()
 
 
 @app.route("/")
 @login_required
 def index():
-    q = request.args.get("q", "").strip()
+    field, q, pat = _search_args()
     sort = request.args.get("sort", "hostname")
     direction = request.args.get("dir", "asc")
-    page = int(request.args.get("page", 1) or 1)
     allh = load_hosts()
-    hosts = sort_hosts(_filter_all(allh, q), sort, direction)
-    rows, page, pages, total = paginate(hosts, page)
-    return render_template("index.html", hosts=rows, q=q, sort=sort, dir=direction,
+    hosts = sort_hosts(_rule_filter(_search(allh, field, q), pat), sort, direction)
+    rows, page, pages, total = paginate(hosts, _page_arg())
+    return render_template("index.html", hosts=rows, field=field, q=q, pat=pat, sort=sort, dir=direction,
                            page=page, pages=pages, total=total, stats=summary(allh))
 
 
@@ -382,77 +556,93 @@ def _dup_errors(hosts, norm, exclude_hostname=None):
     return errs
 
 
-@app.route("/add", methods=["GET", "POST"])
-@admin_required
-def add():
-    if request.method == "POST":
-        rec = {f: request.form.get(f, "") for f in CORE_FIELDS}
-        rec["DAY"] = "Y" if request.form.get("DAY") else "N"
-        rec["NIGHT"] = "Y" if request.form.get("NIGHT") else "N"
-        confirm = request.form.get("confirm_override") == "1"
-        errors, norm = validate_core(rec)
-        with _hosts_lock:
-            hosts = load_hosts()
-            if not errors:
-                errors += _dup_errors(hosts, norm)
-            if errors:
-                return _form("add", norm, errors, [], "", hosts)
-            conflicts = contact_conflicts(hosts, norm["department"], norm["name"], norm["phone"])
-            if conflicts and not confirm:
-                return _form("add", norm, [], conflicts, "", hosts)
-            out = {f: norm[f] for f in CORE_FIELDS + FLAG_FIELDS}
-            out["keyword"] = []
-            hosts.append(out)
-            save_hosts(hosts)
-        audit("add", norm["hostname"], record_detail(out))
-        flash(f"'{norm['hostname']}' 등록 완료.", "success")
-        return redirect(url_for("index"))
-    blank = {f: "" for f in CORE_FIELDS}
-    blank.update({"DAY": "N", "NIGHT": "N"})
-    return _form("add", blank, [], [], "", load_hosts())
-
-
 def _form(mode, rec, errors, warnings, original_hostname, hosts):
     return render_template("form.html", mode=mode, rec=rec, errors=errors, warnings=warnings,
                            original_hostname=original_hostname,
                            departments=distinct_values(hosts, "department"),
-                           names=distinct_values(hosts, "name"))
+                           contacts=distinct_contacts(hosts), metrics=load_metric_catalog())
+
+
+def _posted_host():
+    rec = {f: request.form.get(f, "") for f in HOST_FIELDS}
+    try:
+        raw_rules = json.loads(request.form.get("rules_json", "[]") or "[]")
+    except json.JSONDecodeError:
+        raw_rules = None
+    return rec, raw_rules
+
+
+def _blank_rule():
+    return {"id": "", "name": "기본", "metrics": ["*"], "keywords": [], "any_level": "N",
+            "DAY": "Y", "NIGHT": "Y", "contacts": [{"name": "", "phone": ""}]}
+
+
+def _save_host(mode, original_hostname=""):
+    """add/edit POST 공통 처리. 성공 시 (None, out, before) / 화면 재표시 시 (response, None, None)"""
+    rec, raw_rules = _posted_host()
+    confirm = request.form.get("confirm_override") == "1"
+    errors, norm = validate_host(rec)
+    if raw_rules is None:
+        errors.append("규칙 데이터를 해석할 수 없습니다.")
+        raw_rules = []
+    rule_errors, rules = validate_rules(raw_rules)
+    errors += rule_errors
+    norm["rules"] = rules or [_normalize_rule(r, i) for i, r in enumerate(raw_rules)]
+    with _hosts_lock:
+        hosts = load_hosts()
+        before = None
+        if mode == "edit":
+            target = find_host(hosts, original_hostname)
+            if not target:
+                abort(404)
+            before = json.loads(json.dumps(target))
+        if not errors:
+            errors += _dup_errors(hosts, norm, exclude_hostname=original_hostname or None)
+        if errors:
+            return _form(mode, norm, errors, [], original_hostname, hosts), None, None
+        conflicts = contact_conflicts(hosts, rules, exclude_hostname=original_hostname or None)
+        if conflicts and not confirm:
+            return _form(mode, norm, [], conflicts, original_hostname, hosts), None, None
+        out = {f: norm[f] for f in HOST_FIELDS}
+        out["rules"] = rules
+        if mode == "edit":
+            hosts = [out if h is target else h for h in hosts]
+        else:
+            hosts.append(out)
+        save_hosts(hosts)
+    return None, out, before
+
+
+@app.route("/add", methods=["GET", "POST"])
+@admin_required
+def add():
+    if request.method == "POST":
+        resp, out, _ = _save_host("add")
+        if resp is not None:
+            return resp
+        audit("add", out["hostname"], record_detail(out))
+        flash(f"'{out['hostname']}' 등록 완료.", "success")
+        return redirect(url_for("index"))
+    blank = {f: "" for f in HOST_FIELDS}
+    blank["rules"] = [_blank_rule()]
+    return _form("add", blank, [], [], "", load_hosts())
 
 
 @app.route("/edit/<path:hostname>", methods=["GET", "POST"])
 @admin_required
 def edit(hostname):
-    with _hosts_lock:
-        target = find_host(load_hosts(), hostname)
-        if not target:
-            abort(404)
-        original_hostname = target["hostname"]
+    target = find_host(load_hosts(), hostname)
+    if not target:
+        abort(404)
+    original_hostname = target["hostname"]
     if request.method == "POST":
-        rec = {f: request.form.get(f, "") for f in CORE_FIELDS}
-        rec["DAY"] = "Y" if request.form.get("DAY") else "N"
-        rec["NIGHT"] = "Y" if request.form.get("NIGHT") else "N"
-        confirm = request.form.get("confirm_override") == "1"
-        errors, norm = validate_core(rec)
-        with _hosts_lock:
-            hosts = load_hosts()
-            target = find_host(hosts, original_hostname)
-            if not target:
-                abort(404)
-            before = {f: target.get(f) for f in CORE_FIELDS + FLAG_FIELDS}
-            if not errors:
-                errors += _dup_errors(hosts, norm, exclude_hostname=original_hostname)
-            if errors:
-                return _form("edit", norm, errors, [], original_hostname, hosts)
-            conflicts = contact_conflicts(hosts, norm["department"], norm["name"],
-                                          norm["phone"], exclude_hostname=original_hostname)
-            if conflicts and not confirm:
-                return _form("edit", norm, [], conflicts, original_hostname, hosts)
-            for f in CORE_FIELDS + FLAG_FIELDS:
-                target[f] = norm[f]
-            save_hosts(hosts)
-        changed = {FIELD_LABELS[f]: [before[f], norm[f]] for f in CORE_FIELDS + FLAG_FIELDS if before[f] != norm[f]}
+        resp, out, before = _save_host("edit", original_hostname)
+        if resp is not None:
+            return resp
+        b, a = record_detail(before), record_detail(out)
+        changed = {k: [b[k], a[k]] for k in a if b.get(k) != a[k]}
         audit("edit", original_hostname, {"changed": changed})
-        flash(f"'{norm['hostname']}' 수정 완료.", "success")
+        flash(f"'{out['hostname']}' 수정 완료.", "success")
         return redirect(url_for("index"))
     return _form("edit", target, [], [], original_hostname, load_hosts())
 
@@ -474,33 +664,41 @@ def delete(hostname):
 
 
 # ===========================================================================
-#  Export (조회조건 기준 전체)
+#  Export / Import 공통 (한 행 = 서버 × 규칙 × 담당자)
 # ===========================================================================
-EXPORT_HEADER = CORE_FIELDS + FLAG_FIELDS + ["keyword"]
+IMPORT_HEADER = ["hostname", "ip", "department", "rule_name", "metrics", "keywords",
+                 "any_level", "DAY", "NIGHT", "contact_seq", "name", "phone"]
+IMPORT_REQUIRED = ["hostname", "ip", "department", "name", "phone"]
+IMPORT_SAMPLE = [
+    ["hl_rec_db", "10.5.240.5", "금융운영팀", "OS", "가용성;*사용률", "", "N", "Y", "Y", "1", "홍기웅", "010-1234-5678"],
+    ["hl_rec_db", "10.5.240.5", "금융운영팀", "OS", "가용성;*사용률", "", "N", "Y", "Y", "2", "부담당", "010-2345-6789"],
+    ["hl_rec_db", "10.5.240.5", "금융운영팀", "DBA", "SQL Server Error Log;*프로세스 개수", "", "Y", "Y", "Y", "1", "DBA담당", "010-3456-7890"],
+    ["hl_rec_db", "10.5.240.5", "금융운영팀", "기본", "*", "", "N", "N", "Y", "1", "홍기웅", "010-1234-5678"],
+]
 
 
 def _export_rows(hosts):
-    rows = [EXPORT_HEADER]
+    rows = [IMPORT_HEADER]
     for h in hosts:
-        rows.append([h.get(f, "") for f in CORE_FIELDS + FLAG_FIELDS] + [";".join(h.get("keyword", []))])
+        for r in h.get("rules", []):
+            for seq, c in enumerate(r["contacts"], start=1):
+                rows.append([h["hostname"], h["ip"], h["department"], r["name"], ";".join(r["metrics"]),
+                             ";".join(r["keywords"]), r["any_level"], r["DAY"], r["NIGHT"], str(seq),
+                             c["name"], c["phone"]])
     return rows
 
 
 def _hosts_for_export():
-    hosts = load_hosts()
-    q = request.args.get("q", "").strip()
-    field = request.args.get("field", "").strip()
-    kw = request.args.get("kw", "").strip()
-    pat = request.args.get("pat", "all").strip()
-    if field and field in CORE_FIELDS and kw:
-        hosts = [h for h in hosts if kw.lower() in str(h.get(field, "")).lower()]
-    elif q:
-        hosts = _filter_all(hosts, q)
-    if pat == "has":
-        hosts = [h for h in hosts if h.get("keyword")]
-    elif pat == "none":
-        hosts = [h for h in hosts if not h.get("keyword")]
+    field, q, pat = _search_args()
+    hosts = _rule_filter(_search(load_hosts(), field, q), pat)
     return sort_hosts(hosts, request.args.get("sort", "hostname"), request.args.get("dir", "asc"))
+
+
+def _phone_text_cols(ws, header):
+    col = header.index("phone") + 1
+    for row in ws.iter_rows(min_col=col, max_col=col):
+        for cell in row:
+            cell.number_format = "@"
 
 
 @app.route("/export/csv")
@@ -510,9 +708,9 @@ def export_csv():
     buf = io.StringIO(); w = csv.writer(buf)
     for r in _export_rows(hosts):
         w.writerow(r)
-    audit("export_csv", f"{len(hosts)}건")
+    audit("export_csv", f"{len(hosts)}대")
     fname = f"hosts_{datetime.now():%Y%m%d_%H%M%S}.csv"
-    return Response(("\ufeff" + buf.getvalue()).encode("utf-8"), mimetype="text/csv",
+    return Response(("﻿" + buf.getvalue()).encode("utf-8"), mimetype="text/csv",
                     headers={"Content-Disposition": f"attachment; filename={fname}"})
 
 
@@ -523,38 +721,33 @@ def export_xlsx():
     wb = Workbook(); ws = wb.active; ws.title = "hosts"
     for r in _export_rows(hosts):
         ws.append(r)
+    _phone_text_cols(ws, IMPORT_HEADER)
     bio = io.BytesIO(); wb.save(bio); bio.seek(0)
-    audit("export_xlsx", f"{len(hosts)}건")
+    audit("export_xlsx", f"{len(hosts)}대")
     fname = f"hosts_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
     return send_file(bio, as_attachment=True, download_name=fname,
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-
-# ===========================================================================
-#  Import 양식 / 처리
-# ===========================================================================
-IMPORT_HEADER = CORE_FIELDS + FLAG_FIELDS
-IMPORT_SAMPLE = ["SCC-IVR01", "1.1.1.1", "금융운영팀", "이찬행", "010-1234-5678", "Y", "N"]
 
 
 @app.route("/template/csv")
 @login_required
 def template_csv():
     buf = io.StringIO(); w = csv.writer(buf)
-    w.writerow(IMPORT_HEADER); w.writerow(IMPORT_SAMPLE)
-    return Response(("\ufeff" + buf.getvalue()).encode("utf-8"), mimetype="text/csv",
+    w.writerow(IMPORT_HEADER)
+    for r in IMPORT_SAMPLE:
+        w.writerow(r)
+    return Response(("﻿" + buf.getvalue()).encode("utf-8"), mimetype="text/csv",
                     headers={"Content-Disposition": "attachment; filename=import_template.csv"})
 
 
 @app.route("/template/xlsx")
 @login_required
 def template_xlsx():
-    from openpyxl.utils import get_column_letter
     wb = Workbook(); ws = wb.active; ws.title = "hosts"
-    ws.append(IMPORT_HEADER); ws.append(IMPORT_SAMPLE)
-    col = get_column_letter(IMPORT_HEADER.index("phone") + 1)
-    for r in (1, 2):
-        ws[f"{col}{r}"].number_format = "@"
+    ws.append(IMPORT_HEADER)
+    for r in IMPORT_SAMPLE:
+        ws.append(r)
+    _phone_text_cols(ws, IMPORT_HEADER)
     bio = io.BytesIO(); wb.save(bio); bio.seek(0)
     return send_file(bio, as_attachment=True, download_name="import_template.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -585,8 +778,61 @@ def _read_xlsx_rows(raw):
 
 
 def _resolve_headers(keys):
-    lower = {k.lower(): k for k in keys}
-    return {f: lower[f.lower()] for f in CORE_FIELDS + FLAG_FIELDS if f.lower() in lower}
+    lower = {str(k).strip().lower(): k for k in keys}
+    return {f: lower[f.lower()] for f in IMPORT_HEADER if f.lower() in lower}
+
+
+def _build_import_host(rows, hmap, existing):
+    """같은 hostname 의 행들 → (errors, host)"""
+    errors = []
+    get = lambda raw, f: (raw.get(hmap[f], "") or "").strip() if f in hmap else None
+    first = rows[0][1]
+    host = {f: get(first, f) for f in HOST_FIELDS}
+    for idx, raw in rows[1:]:
+        for f in ("ip", "department"):
+            if get(raw, f) and get(raw, f) != host[f]:
+                errors.append(f"행 {idx}: {FIELD_LABELS[f]} 가 같은 서버의 다른 행과 다름")
+    errs, host = validate_host(host)
+    errors += errs
+
+    old_rules = {r["name"].lower(): r for r in (existing or {}).get("rules", [])}
+    grouped = {}
+    for idx, raw in rows:
+        rname = get(raw, "rule_name") or "기본"
+        grouped.setdefault(rname, []).append((idx, raw))
+
+    raw_rules = []
+    for rname, rrows in grouped.items():
+        old = old_rules.get(rname.lower(), {})
+
+        def attr(f, default):
+            if f not in hmap:
+                return old.get(f, default)
+            vals = [get(raw, f) for _, raw in rrows if get(raw, f)]
+            return vals[0] if vals else default
+
+        def seq_of(item):
+            s = get(item[1], "contact_seq") or ""
+            return (int(s) if s.isdigit() else 9999, item[0])
+
+        contacts, seen = [], set()
+        for idx, raw in sorted(rrows, key=seq_of):
+            phone = normalize_phone(get(raw, "phone") or "")
+            if phone in seen:
+                continue
+            seen.add(phone)
+            contacts.append({"name": get(raw, "name") or "", "phone": phone})
+        raw_rules.append({
+            "id": old.get("id", ""), "name": rname,
+            "metrics": _to_list(attr("metrics", ["*"])) or ["*"],
+            "keywords": _to_list(attr("keywords", [])),
+            "any_level": attr("any_level", "N"), "DAY": attr("DAY", "N"), "NIGHT": attr("NIGHT", "N"),
+            "contacts": contacts,
+        })
+    errs, rules = validate_rules(raw_rules)
+    errors += errs
+    host["rules"] = rules
+    return errors, host
 
 
 @app.route("/import", methods=["GET", "POST"])
@@ -607,62 +853,47 @@ def import_file():
     if not rows:
         flash("데이터 행이 없습니다.", "error"); return render_template("import.html", report=None)
     hmap = _resolve_headers(rows[0].keys())
-    missing = [c for c in CORE_FIELDS if c not in hmap]
+    missing = [c for c in IMPORT_REQUIRED if c not in hmap]
     if missing:
-        flash("필수 열 누락: " + ", ".join(missing) + " (헤더: " + ", ".join(CORE_FIELDS) + " [+ DAY, NIGHT])", "error")
+        flash("필수 열 누락: " + ", ".join(missing) + " (헤더: " + ", ".join(IMPORT_HEADER) + ")", "error")
         return render_template("import.html", report=None)
 
-    has_day, has_night = "DAY" in hmap, "NIGHT" in hmap
     report = {"added": 0, "updated": 0, "rejected": [], "warnings": [], "added_hosts": [], "updated_hosts": []}
+    groups = {}
+    for idx, raw_rec in enumerate(rows, start=2):
+        hn = (raw_rec.get(hmap["hostname"], "") or "").strip()
+        if not hn:
+            report["rejected"].append({"row": str(idx), "hostname": "", "reasons": ["호스트네임 누락"]})
+            continue
+        groups.setdefault(hn.lower(), []).append((idx, raw_rec))
+
     with _hosts_lock:
         hosts = load_hosts()
-        seen_host, seen_ip = {}, {}
-        for idx, raw_rec in enumerate(rows, start=2):
-            rec = {c: (raw_rec.get(hmap[c], "") or "").strip() for c in CORE_FIELDS}
-            if has_day:
-                rec["DAY"] = raw_rec.get(hmap["DAY"], "")
-            if has_night:
-                rec["NIGHT"] = raw_rec.get(hmap["NIGHT"], "")
-            errors, norm = validate_core(rec)
-            hkey, ipkey = norm["hostname"].lower(), norm["ip"]
-            if norm["hostname"] and hkey in seen_host:
-                errors.append(f"파일 내 호스트네임 중복(행 {seen_host[hkey]})")
-            if norm["ip"] and ipkey in seen_ip:
-                errors.append(f"파일 내 IP 중복(행 {seen_ip[ipkey]})")
+        seen_ip = {}
+        for key, grows in groups.items():
+            row_label = ",".join(str(i) for i, _ in grows[:5]) + ("…" if len(grows) > 5 else "")
+            existing = find_host(hosts, grows[0][1].get(hmap["hostname"], ""))
+            errors, host = _build_import_host(grows, hmap, existing)
+            if not errors and host["ip"] in seen_ip:
+                errors.append(f"파일 내 IP 중복('{seen_ip[host['ip']]}' 와 같음)")
             if not errors:
-                owner = find_by_ip(hosts, norm["ip"], exclude_hostname=norm["hostname"])
+                owner = find_by_ip(hosts, host["ip"], exclude_hostname=host["hostname"])
                 if owner:
-                    errors.append(f"IP '{norm['ip']}' 가 기존 '{owner['hostname']}' 와 중복")
+                    errors.append(f"IP '{host['ip']}' 가 기존 '{owner['hostname']}' 와 중복")
             if errors:
-                report["rejected"].append({"row": idx, "hostname": norm.get("hostname", ""), "reasons": errors})
+                report["rejected"].append({"row": row_label, "hostname": host.get("hostname", ""), "reasons": errors})
                 continue
-            seen_host[hkey] = idx
-            if ipkey:
-                seen_ip[ipkey] = idx
-            conflicts = contact_conflicts(hosts, norm["department"], norm["name"],
-                                          norm["phone"], exclude_hostname=norm["hostname"])
-            if conflicts:
-                report["warnings"].append({"row": idx, "hostname": norm["hostname"], "name": norm["name"],
-                                           "department": norm["department"], "phone": norm["phone"],
-                                           "existing": [{"hostname": c["hostname"], "phone": c["phone"]} for c in conflicts]})
-            existing = find_host(hosts, norm["hostname"])
+            seen_ip[host["ip"]] = host["hostname"]
+            for c in contact_conflicts(hosts, host["rules"], exclude_hostname=host["hostname"]):
+                report["warnings"].append({"row": row_label, "hostname": host["hostname"], **c})
             if existing:
-                for fld in CORE_FIELDS:
-                    existing[fld] = norm[fld]
-                if has_day:
-                    existing["DAY"] = norm["DAY"]
-                if has_night:
-                    existing["NIGHT"] = norm["NIGHT"]
+                hosts = [host if h is existing else h for h in hosts]
                 report["updated"] += 1
-                report["updated_hosts"].append(norm["hostname"])
+                report["updated_hosts"].append(host["hostname"])
             else:
-                new = {fld: norm[fld] for fld in CORE_FIELDS}
-                new["DAY"] = norm["DAY"] if has_day else "N"
-                new["NIGHT"] = norm["NIGHT"] if has_night else "N"
-                new["keyword"] = []
-                hosts.append(new)
+                hosts.append(host)
                 report["added"] += 1
-                report["added_hosts"].append(norm["hostname"])
+                report["added_hosts"].append(host["hostname"])
         save_hosts(hosts)
     audit("import", f"추가 {report['added']} / 갱신 {report['updated']} / 거부 {len(report['rejected'])}",
           {"추가": report["added_hosts"], "갱신": report["updated_hosts"], "거부 건수": len(report["rejected"])})
@@ -670,69 +901,84 @@ def import_file():
 
 
 # ===========================================================================
-#  모니터링 등록
+#  규칙 일괄적용 (여러 서버에 같은 규칙 추가/교체/삭제)
 # ===========================================================================
-def _monitor_filter(hosts, field, kw, pat):
-    if field in CORE_FIELDS and kw:
-        hosts = [h for h in hosts if kw.lower() in str(h.get(field, "")).lower()]
-    if pat == "has":
-        hosts = [h for h in hosts if h.get("keyword")]
-    elif pat == "none":
-        hosts = [h for h in hosts if not h.get("keyword")]
-    return hosts
-
-
 @app.route("/monitor")
 @login_required
 def monitor():
-    field = request.args.get("field", "hostname").strip()
-    if field not in SEARCH_FIELDS:
-        field = "hostname"
-    kw = request.args.get("kw", "").strip()
-    pat = request.args.get("pat", "all").strip()
+    field, q, pat = _search_args()
     sort = request.args.get("sort", "hostname")
     direction = request.args.get("dir", "asc")
-    page = int(request.args.get("page", 1) or 1)
-    hosts = sort_hosts(_monitor_filter(load_hosts(), field, kw, pat), sort, direction)
-    rows, page, pages, total = paginate(hosts, page)
-    return render_template("monitor.html", hosts=rows, field=field, kw=kw, pat=pat,
-                           sort=sort, dir=direction, page=page, pages=pages, total=total)
+    hosts = sort_hosts(_rule_filter(_search(load_hosts(), field, q), pat), sort, direction)
+    rows, page, pages, total = paginate(hosts, _page_arg())
+    allh = load_hosts()
+    rule_names = sorted({r["name"] for h in allh for r in h.get("rules", [])})
+    return render_template("monitor.html", hosts=rows, field=field, q=q, pat=pat,
+                           sort=sort, dir=direction, page=page, pages=pages, total=total,
+                           rule_names=rule_names, contacts=distinct_contacts(allh),
+                           metrics=load_metric_catalog())
 
 
-@app.route("/monitor/patterns", methods=["POST"])
+@app.route("/monitor/rules", methods=["POST"])
 @admin_required
-def monitor_patterns():
+def monitor_rules():
     p = request.get_json(silent=True) or {}
-    add_patterns = [x.strip() for x in p.get("add", []) if str(x).strip()]
-    removals = p.get("remove", {})
+    action = p.get("action", "upsert")
     scope = p.get("scope", "selected")
     if scope == "filtered":
-        targets = [h["hostname"] for h in _monitor_filter(
-            load_hosts(), p.get("field", "hostname"), p.get("kw", "").strip(), p.get("pat", "all"))]
+        field = p.get("field", "all") if p.get("field") in SEARCH_FIELDS else "all"
+        targets = [h["hostname"] for h in _rule_filter(_search(load_hosts(), field, str(p.get("q", "")).strip()),
+                                                       p.get("pat", "all"))]
     else:
-        targets = p.get("hostnames", [])
-    if not targets and not removals:
-        return jsonify({"ok": False, "msg": "대상이 없습니다."}), 400
+        targets = [str(x) for x in p.get("hostnames", [])]
+    if not targets:
+        return jsonify({"ok": False, "msg": "대상 서버가 없습니다."}), 400
+
+    if action == "delete":
+        rname = str(p.get("rule_name", "")).strip()
+        if not rname:
+            return jsonify({"ok": False, "msg": "삭제할 규칙명을 입력하세요."}), 400
+    elif action == "upsert":
+        errors, rules = validate_rules([p.get("rule") or {}])
+        if errors:
+            return jsonify({"ok": False, "msg": "\n".join(errors)}), 400
+        rule = rules[0]
+        rname = rule["name"]
+    else:
+        return jsonify({"ok": False, "msg": "알 수 없는 작업"}), 400
+
+    tset = {t.lower() for t in targets}
+    changed, skipped = [], []
     with _hosts_lock:
         hosts = load_hosts()
-        tset = {t.lower() for t in targets}
-        rmlower = {k.lower(): v for k, v in removals.items()}
         for h in hosts:
-            hl = h.get("hostname", "").lower()
-            kw = list(h.get("keyword", []))
-            if hl in rmlower:
-                kw = [x for x in kw if x not in rmlower[hl]]
-            if hl in tset:
-                for x in add_patterns:
-                    if x not in kw:
-                        kw.append(x)
-            h["keyword"] = kw
+            if h["hostname"].lower() not in tset:
+                continue
+            rules = h.get("rules", [])
+            idx = next((i for i, r in enumerate(rules) if r["name"].lower() == rname.lower()), None)
+            if action == "delete":
+                if idx is None:
+                    continue
+                if len(rules) == 1:
+                    skipped.append(h["hostname"])      # 마지막 규칙은 삭제 불가
+                    continue
+                rules.pop(idx)
+            else:
+                new = dict(rule, id=rules[idx]["id"] if idx is not None else new_rule_id())
+                if idx is None:
+                    rules.append(new)
+                else:
+                    rules[idx] = new
+            h["rules"] = rules
+            changed.append(h["hostname"])
         save_hosts(hosts)
     scope_label = "검색결과 전체" if scope == "filtered" else "선택"
-    audit("monitor_patterns", f"{scope_label} {len(targets)}대",
-          {"범위": scope_label, "추가 패턴": add_patterns,
-           "삭제": (removals or None), "대상 서버": targets})
-    return jsonify({"ok": True})
+    detail = {"범위": scope_label, "작업": "규칙 삭제" if action == "delete" else "규칙 추가/교체",
+              "규칙": rname if action == "delete" else rule_text(rule), "대상 서버": changed}
+    if skipped:
+        detail["건너뜀(마지막 규칙)"] = skipped
+    audit("rules_bulk", f"{scope_label} {len(changed)}대 · {rname}", detail)
+    return jsonify({"ok": True, "changed": len(changed), "skipped": skipped})
 
 
 # ===========================================================================
@@ -854,7 +1100,7 @@ def change_password():
 @app.route("/admin/audit")
 @admin_required
 def audit_page():
-    page = int(request.args.get("page", 1) or 1)
+    page = _page_arg()
     entries = []
     if os.path.exists(AUDIT_FILE):
         with open(AUDIT_FILE, "r", encoding="utf-8") as f:

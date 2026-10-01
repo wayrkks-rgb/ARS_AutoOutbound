@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_pager.html" import pager %}
 {% from "_sort.html" import sortth %}
+{% from "_rules.html" import rule_summary %}
 {% block title %}서버등록{% endblock %}
 {% block body %}
 <h1>서버 등록 현황</h1>
@@ -8,37 +9,43 @@
 
 <div class="stat-row">
   <div class="stat"><div class="num">{{ stats.total }}</div><div class="lbl">전체 서버</div></div>
-  <div class="stat"><div class="num" style="color:var(--orange-dark)">{{ stats.with_pattern }}</div><div class="lbl">패턴 등록</div></div>
-  <div class="stat"><div class="num" style="color:var(--ok)">{{ stats.day }}</div><div class="lbl">주간(DAY=Y)</div></div>
-  <div class="stat"><div class="num" style="color:var(--ok)">{{ stats.night }}</div><div class="lbl">야간(NIGHT=Y)</div></div>
+  <div class="stat"><div class="num" style="color:var(--orange-dark)">{{ stats.multi }}</div><div class="lbl">규칙 2개 이상(담당 분리)</div></div>
+  <div class="stat"><div class="num">{{ stats.contacts }}</div><div class="lbl">등록 담당자(번호 기준)</div></div>
+  <div class="stat"><div class="num" style="color:var(--ok)">{{ stats.day }}</div><div class="lbl">주간 발신 서버</div></div>
+  <div class="stat"><div class="num" style="color:var(--ok)">{{ stats.night }}</div><div class="lbl">야간 발신 서버</div></div>
 </div>
 
 <div class="toolbar">
   <form method="get" class="searchform">
-    <input class="search" type="search" name="q" value="{{ q }}" placeholder="호스트네임/IP/부서/이름/번호 검색">
+    <select name="field" style="max-width:130px">
+      <option value="all" {{ 'selected' if field=='all' }}>전체</option>
+      {% for f in SEARCH_FIELDS %}<option value="{{ f }}" {{ 'selected' if field==f }}>{{ FIELD_LABELS[f] }}</option>{% endfor %}
+    </select>
+    <input class="search" type="search" name="q" value="{{ q }}" placeholder="포함 검색">
+    <select name="pat" style="max-width:150px">
+      <option value="all" {{ 'selected' if pat=='all' }}>규칙 전체</option>
+      <option value="multi" {{ 'selected' if pat=='multi' }}>규칙 2개 이상</option>
+      <option value="single" {{ 'selected' if pat=='single' }}>규칙 1개</option>
+    </select>
     <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="dir" value="{{ dir }}">
     <button class="btn btn-ghost" type="submit">검색</button>
-    {% if q %}<a class="btn btn-ghost" href="{{ url_for('index') }}">초기화</a>{% endif %}
+    {% if q or pat!='all' %}<a class="btn btn-ghost" href="{{ url_for('index') }}">초기화</a>{% endif %}
   </form>
   <span class="spacer"></span>
   {% if current_role=='admin' %}<a class="btn btn-primary" href="{{ url_for('add') }}">+ 서버추가</a>{% endif %}
-  <a class="btn btn-outline" href="{{ url_for('export_csv', q=q, sort=sort, dir=dir) }}">CSV 내보내기</a>
-  <a class="btn btn-outline" href="{{ url_for('export_xlsx', q=q, sort=sort, dir=dir) }}">Excel 내보내기</a>
+  <a class="btn btn-outline" href="{{ url_for('export_csv', field=field, q=q, pat=pat, sort=sort, dir=dir) }}">CSV 내보내기</a>
+  <a class="btn btn-outline" href="{{ url_for('export_xlsx', field=field, q=q, pat=pat, sort=sort, dir=dir) }}">Excel 내보내기</a>
 </div>
 
 <div class="tbl-wrap">
   <table>
     <thead>
       <tr>
-        {% set ex = {'q': q} %}
+        {% set ex = {'field': field, 'q': q, 'pat': pat} %}
         {{ sortth('index', sort, dir, 'hostname', '호스트네임', ex) }}
         {{ sortth('index', sort, dir, 'ip', 'IP', ex) }}
         {{ sortth('index', sort, dir, 'department', '부서', ex) }}
-        {{ sortth('index', sort, dir, 'name', '이름', ex) }}
-        {{ sortth('index', sort, dir, 'phone', '핸드폰번호', ex) }}
-        {{ sortth('index', sort, dir, 'DAY', '주간', ex) }}
-        {{ sortth('index', sort, dir, 'NIGHT', '야간', ex) }}
-        {{ sortth('index', sort, dir, 'keyword', '패턴', ex) }}
+        {{ sortth('index', sort, dir, 'rules', '수신 규칙 · 담당자 (정 → 부)', ex) }}
         {% if current_role=='admin' %}<th style="text-align:right">관리</th>{% endif %}
       </tr>
     </thead>
@@ -48,27 +55,23 @@
         <td class="mono"><strong>{{ h.hostname }}</strong></td>
         <td class="mono">{{ h.ip }}</td>
         <td>{{ h.department }}</td>
-        <td>{{ h.name }}</td>
-        <td class="mono">{{ h.phone }}</td>
-        <td><span class="yn {{ 'y' if h.DAY=='Y' else 'n' }}">{{ h.DAY }}</span></td>
-        <td><span class="yn {{ 'y' if h.NIGHT=='Y' else 'n' }}">{{ h.NIGHT }}</span></td>
-        <td>{% if h.keyword %}<button type="button" class="btn btn-ghost btn-sm" onclick='viewPatterns({{ h.hostname|tojson }}, {{ h.keyword|tojson }})'>패턴 {{ h.keyword|length }}개</button>{% else %}<span style="color:#c2c7cf">-</span>{% endif %}</td>
+        <td>{{ rule_summary(h) }}</td>
         {% if current_role=='admin' %}
         <td><div class="actions">
             <a class="btn btn-ghost btn-sm" href="{{ url_for('edit', hostname=h.hostname) }}">수정</a>
-            <form method="post" action="{{ url_for('delete', hostname=h.hostname) }}"
-                  onsubmit="return confirm('[{{ h.hostname }}] 삭제하시겠습니까?');" style="display:inline">
+            <form method="post" action="{{ url_for('delete', hostname=h.hostname) }}" style="display:inline"
+                  data-confirm="{{ '[' ~ h.hostname ~ '] 삭제하시겠습니까?' }}" onsubmit="return confirm(this.dataset.confirm);">
               <button class="btn btn-danger btn-sm" type="submit">삭제</button>
             </form>
         </div></td>
         {% endif %}
       </tr>
       {% else %}
-      <tr><td colspan="{{ 8 + (1 if current_role=='admin' else 0) }}" class="empty">
+      <tr><td colspan="{{ 4 + (1 if current_role=='admin' else 0) }}" class="empty">
         등록된 정보가 없습니다.{% if current_role=='admin' %} [서버추가] 또는 [일괄등록]으로 추가하세요.{% endif %}</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-{{ pager('index', page, pages, {'q': q, 'sort': sort, 'dir': dir}) }}
+{{ pager('index', page, pages, {'field': field, 'q': q, 'pat': pat, 'sort': sort, 'dir': dir}) }}
 {% endblock %}

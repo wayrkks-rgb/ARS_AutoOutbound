@@ -1,0 +1,332 @@
+메모리 사용률
+IVR_Error_log_TEST
+디스크 Top I/O 처리율
+dataware-engine-moca.log
+CPU 사용률
+Log Monitor
+riv_app.log[RELAY_CENTER_ERROR_DETECTED]
+C 사용률
+가상메모리 스왑 사용률
+IMA_QA_ECM_log
+SQL Server Error Log
+riv_app.log[Read timed out]
+IS_HMP_UP_log
+jboss_access[YYYY]-[MM]-[DD].log
+infochatter11.out
+녹음 누락시 RESULT[E] 다음 스트링에 내선포함
+/hli_app/app 사용률
+콜 녹취 인터페이스 서비스 오류
+Pod
+가용성
+Y 사용률
+LOG_amp.log
+IS-IVR_regi
+LOG_tts-smp.log
+DHmp 프로세스 개수
+D 사용률
+E 사용률
+mdmlog/batch
+mdm11/access_log
+서버 기동 지속시간
+/hli_app/sw 사용률
+/opt/Avaya/avpom/POManager/logs/PAMService.out
+isac_vgw_dev2_dialog-manager.log[try to exit GRPC Sevice Thread]
+IVR_Channel_Regi
+/hli_db/arch/PHGP 사용률
+/ 사용률
+isac_vgw_dev2_speech-gateway.log[exit SpeechGateway Main Thread]
+/hli_app/data 사용률
+itsmprdadmin02/nohup/itsmprdadmin02.out
+CPCOKR/logs/catalina.out
+HFSR 프로세스 개수
+/opt/avaya/AgentAICC/apache-tomcat-9.0.52/logs/catalina.out
+/hli_app/log 사용률
+IMA_DEV_INT_WEB_log
+/hli_app/logs 사용률
+/kli_appl/r_klifos 사용률
+X 사용률
+/hli_app/log/web/met/error_log/error_log.[YYYY][MM][DD]
+httpd 프로세스 개수
+LOG_tcs_error_log.log
+itsmprdadmin01/nohup/itsmprdadmin01.out
+/hli_db/data 사용률
+.*httpd.* 프로세스 개수
+IMA_PROD_INT_WEB02_log
+T 사용률
+I 사용률
+LOG_okms11.out
+access_log/jboss_access.log
+WAS/logs/catalina.out
+/home 사용률
+IMA_PROD_INT_WEB01_log
+/var 사용률
+P 사용률
+V 사용률
+U 사용률
+S 사용률
+B 사용률
+.*next-server.* 프로세스 개수
+IS_HMP_ERR_1
+.*jboss.* 프로세스 개수
+점검
+모니터링 자동발신 이력 저장
+mitmsMng11/nohup/mitmsMng11_stdout.out
+IMA_PROD_EXT_WEB02_log
+IMA_PROD_ECM01_log
+/kli_operation/product/batch 사용률
+/kli_data/oracle/kli_arch2 사용률
+mitmsMng21/nohup/mitmsMng21_stdout.out
+hsh11.out
+SM_UP_log
+/var/opt/gitlab/backups 사용률
+/kli_appl/t_deposit 사용률
+/hli_appl/web 사용률
+/hli_appl/appl/logs 사용률
+/hli_app/data/asisbpm11 사용률
+콜 녹취 인터페이스 GW연동 에러
+녹취시스템 내부 연동GW 접속에러
+MM_UP_log
+MM_Down_log
+/hli_db/archive 사용률
+R 사용률
+A 사용률
+/tmp 사용률
+/hli_db/data7 사용률
+mdmMng21 프로세스 개수
+Z 사용률
+UnoPortal.out
+N 사용률
+IMA_PROD_EXT_WEB01_log
+Ham 프로세스 개수
+F 사용률
+/kli_appl/appl/oracle 사용률
+/hli_appl/appl/data 사용률
+/hli_app/data/asisbpm9 사용률
+/hli_app/data/asisbpm10 사용률
+.*jennifer.* 프로세스 개수
+사용률
+녹취이벤트 전송I/F위한 시스템연결 장애[CONNECT SESSION NONE REQ TICKET]
+IMG_DB_log
+/hli_db/oralog 사용률
+.*nginx.* 프로세스 개수
+.*/hli_app/app/openjdk/jdk-17.* 프로세스 개수
+mITMS 프로세스 개수
+itsmqaadmin.out
+/kli_operation 사용률
+/kli_data/oracle/archive 사용률
+/hli_appl/appl/was 사용률
+/hli_app/data/dsp/dud/security 사용률
+/hli_app/data/dsp 사용률
+.*httpd.* 가용성
+.*DEV_REP_BATCH11.* 가용성
+mdm11 프로세스 개수
+K 사용률
+H 사용률
+Event Log Monitor
+/usr 사용률
+/data 사용률
+.*itsmprdadmin01.* 프로세스 개수
+nginx 프로세스 개수
+mitmsMng21_stdout.out
+mitmsMng11_stdout.out
+mchmMng21/nohup/mchmMng21_stdout.out
+mchmMng11/nohup/mchmMng11_stdout.out
+PROCESS_Dport=8095 프로세스 개수
+NTP 서버와 시간 차이
+HoneOP 프로세스 개수
+EKMS_WAS1 프로세스 개수
+/kli_data/oracle/kli_arch3 사용률
+/kli_data/oracle/kli_arch1 사용률
+/hli_db/log 사용률
+/hli_db/data11 사용률
+/hli_db/data/log/postgresql-???.log
+/hli_appl/appl/data/attach 사용률
+/hli_appl/appl/attach 사용률
+/hli_app/sw/was 사용률
+/Netbackup 사용률
+.*jbcs-httpd24-2.4/httpd/sbin/httpd.* 프로세스 개수
+.*ekms11.* 프로세스 개수
+wsm 가용성
+smartplannerMng11 프로세스 개수
+mitmsMng11 프로세스 개수
+intra 프로세스 개수
+hth 가용성
+channelmanager 가용성
+_ora_smon_EPDB 프로세스 개수
+QA_REP_LPAADM11 프로세스 개수
+PROCESS_mysql 프로세스 개수
+PROCESS_hlidaicampap01_AMP 프로세스 개수
+LINUX-PROCESS_qmccwas_grm-record-voice 프로세스 개수
+LINUX-PROCESS_qmccwas_grm-record 프로세스 개수
+LINUX-PROCESS_qmccwas_grm-biz-v3-event 프로세스 개수
+LINUX-PROCESS_hlipvcsap_server.js 프로세스 개수
+LINUX-PROCESS_hlipvcsap_redis-server 프로세스 개수
+LINUX-PROCESS_hlipvcsap_lgw.jar 프로세스 개수
+LINUX-PROCESS_hlipvcsap_kurento 프로세스 개수
+LINUX-PROCESS_hlipvcsap_cti.jar 프로세스 개수
+LINUX-PROCESS_hlipvcsap_cipher.jar 프로세스 개수
+LINUX-PROCESS_hlipvcsap_as.jar 프로세스 개수
+LINUX-PROCESS_hlipvcsap_MSG 프로세스 개수
+LINUX-PROCESS_hlipvcsap_EPS 프로세스 개수
+LINUX-PROCESS_hlipvcsap_DBS 프로세스 개수
+L 사용률
+IMA_DEV_INT_WEB_wsm 프로세스 개수
+IMA_DEV_INT_WEB_hth 프로세스 개수
+HostClientAppSQL_UP_log
+HostClientAppSQL_Down_log
+HostClientAppHO_UP_log
+HostClientAppHO_Down_log
+HostClientAppENC_UP_log
+HostClientAppENC_Down_log
+G 사용률
+EKMS_WAS2 프로세스 개수
+DEV_REP_LPAADM11.out
+COMMON_PROCESS_tcover_cover 프로세스 개수
+/opt/sentinelone/rpm_mount 사용률
+/hli_app/data/common Inode 사용률
+/hli_app 사용률
+.*infochatter11.* 가용성
+smartplannerMng21 프로세스 개수
+itsmqaadmin 프로세스 개수
+eth0 사용률
+_sqlservr_TSQL2 프로세스 개수
+_postgres_PIMG 프로세스 개수
+WINDOWS_PROCESS_OAMP_Manager.exe 프로세스 개수
+REP_SSO11 프로세스 개수
+QA_SOL_OZS12 프로세스 개수
+QA_SOL_OZS11 프로세스 개수
+PROCESS_hlidaictts01_tts.jar 프로세스 개수
+PROCESS_hlidaicampap01_tts-smp 프로세스 개수
+PROCESS_hlidaicampap01_als 프로세스 개수
+OZ_ADMIN 프로세스 개수
+LINUX-PROCESS_qmccwas_redis-server 프로세스 개수
+LINUX-PROCESS_qmccwas_rabbitmq-server 프로세스 개수
+LINUX-PROCESS_qmccwas_grm-biz-v3-api 프로세스 개수
+LINUX-PROCESS_qmccwas_docker-proxy 프로세스 개수
+LINUX-PROCESS_hlibpm_Dbpm 프로세스 개수
+LINUX-PROCESS_MailSystem_BSE1 프로세스 개수
+IS_HMP_Down_log
+DB_LINUX-PROCESS_QONE_jfd 프로세스 개수
+CruzMyData-Zuul 가용성
+CruzMyData-SupportAPI 가용성
+CruzMyData-InsuAPI 가용성
+CORE_Connect_Error_log
+CCNRDB_CTI 프로세스 개수
+/opt/avaya/Agent/server/apache-tomcat-9.0.52/logs/catalina.out
+/opt/Avaya/avpom/POManager/logs/CmpMgrService.out
+/kli_appl/appl/hlidart 사용률
+/kli_appl/appl/SMS 사용률
+/hli_db/data1 사용률
+/hli_data/ora_arch 사용률
+/hli_app/data/vessl/models/tmp 사용률
+/hli_app/data/dsp/dud/security Inode 사용률
+/hli_app/data/dsp Inode 사용률
+.*tomcat.* 가용성
+.*sef11.* 프로세스 개수
+.*priassist21.* 프로세스 개수
+.*postgres: archiver last was.* 가용성
+.*okms11.* 가용성
+.*mdmMng21.* 프로세스 개수
+.*mdm21.* 프로세스 개수
+.*mdm11.* 프로세스 개수
+.*java.* 프로세스 개수
+.*hlirp-gaps-bat.* 가용성
+.*ekms21.* 프로세스 개수
+.*dplatform11.* 가용성
+.*REP_OGW11.* 프로세스 개수
+.*CFAgent.* 프로세스 개수
+.*ADT_ADT21.* 프로세스 개수
+riv_app.log[KFTC_SYSTEM_ERROR_RECOVERY_CALLED]
+riv_app.log[KFTC_SYSTEM_ERROR_CALLED]
+ora_pmon_DHRC 프로세스 개수
+ora_pmon_DHIT 가용성
+ora_pmon_DEDN 가용성
+opcenterMng11 프로세스 개수
+node13 프로세스 개수
+node11 프로세스 개수
+mspMng21 프로세스 개수
+mspMng11 프로세스 개수
+mspAdmin 프로세스 개수
+mitmsMng21 프로세스 개수
+mdm11.out
+isac_vgw_dev2_dialog-manager.log[fail to process SessionChannel Stream exception]
+hlmcadmMng21 프로세스 개수
+hlmcadmMng11 프로세스 개수
+hlmcMng21 프로세스 개수
+hlmcMng11 프로세스 개수
+callq11 프로세스 개수
+callp21/nohup/callp21.out
+callp11/nohup/callp11.out
+agentready 가용성
+agentmaster 가용성
+adminui 프로세스 개수
+adminServer 프로세스 개수
+admin11/nohup/admin11.out
+_ora_smon_KLIRM 프로세스 개수
+REP_SSO12 프로세스 개수
+REP_SGI11 프로세스 개수
+REP_OGW11 프로세스 개수
+REP_OGA11 프로세스 개수
+REP_HGP11 프로세스 개수
+PriAssist Broker 프로세스 개수
+PROCESS_httpd 프로세스 개수
+PROCESS_hlidaictts01_engine 프로세스 개수
+NTP 수집상태
+LISTENER_DHRC 프로세스 개수
+LISTENER_DHIT 가용성
+LISTENER_DEDN 가용성
+LINUX-PROCESS_HCUVE_MCPServer 프로세스 개수
+ITMS 프로세스 개수
+IMA_DEV_MAIN12_WAS_java 프로세스 개수
+IMA_DEV_EXT_WEB_wsm 프로세스 개수
+IMA_DEV_EXT_WEB_htl 프로세스 개수
+IMA_DEV_EXT_WEB_hth 프로세스 개수
+HRCBAT 프로세스 개수
+HRC 프로세스 개수
+DB_WIN_PROCESS_sqlservr.exe 프로세스 개수
+CruzMyData-RatecutAPI 가용성
+CruzMyData-AuthAPI-1.3 가용성
+CCNS_WAS1 프로세스 개수
+/var/lib/pgsql/data/log/postgresql-Tue.log
+/sapadm_mkt 사용률
+/kli_appl/oracle 사용률
+/kli_appl/klifos 사용률
+/hli_db/tempdata 사용률
+/hli_db/sw/oracle19 사용률
+/hli_db/oradata44 사용률
+/hli_db/oradata43 사용률
+/hli_db/data2 사용률
+/hli_appl/appl/strg 사용률
+/hli_appl/appl/SMS 사용률
+/hli_app/data/img_stg1 사용률
+/hli_app/app Inode 사용률
+.*usr/local/lib/node/bin/node.* 프로세스 개수
+.*tr11.* 프로세스 개수
+.*sef21.* 프로세스 개수
+.*rt11.* 프로세스 개수
+.*priassistbrk11.* 프로세스 개수
+.*priassistbrk11.* 가용성
+.*priassist11.* 프로세스 개수
+.*mdmMng11.* 프로세스 개수
+.*kcsmanaged1.* 프로세스 개수
+.*ifrs17M203.* 프로세스 개수
+.*ifrs17M103.* 프로세스 개수
+.*ebpmAdmin.* 프로세스 개수
+.*dataware-frontend-starter.* 가용성
+.*dataware-backend-starter.* 가용성
+.*certapi.* 프로세스 개수
+.*bpmServer2.* 프로세스 개수
+.*bpmServer1.* 프로세스 개수
+.*adminui.* 프로세스 개수
+.*UnoPortal.* 프로세스 개수
+.*SERVER_NAME=REP_SGI11.* 가용성
+.*SERVER_NAME=REP_HGP11.* 가용성
+.*REP_VCP21.* 프로세스 개수
+.*REP_VCP12.* 프로세스 개수
+.*REP_VCP11.* 프로세스 개수
+.*REP_OGW21.* 프로세스 개수
+.*REP_HGP11.* 가용성
+.*QA_DBD.* 프로세스 개수
+.*HLI-D-RMS-11.* 가용성
+.*ADT_ADT11.* 프로세스 개수
+.*/media_manager MM_01 ./config.xml.* 프로세스 개수

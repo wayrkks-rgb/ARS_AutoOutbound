@@ -126,6 +126,30 @@
   .x{cursor:pointer;border:none;background:#fff;color:var(--danger);font-weight:800;border:1px solid #f1c4bc;
     border-radius:6px;width:26px;height:26px;line-height:1}
   .x:hover{background:var(--danger-bg)}
+  /* 수신 규칙 */
+  .rule-card{border:1px solid var(--line);border-left:4px solid var(--orange);border-radius:12px;padding:16px 18px;margin-bottom:14px;background:#fff}
+  .rule-card .field{margin-top:12px}
+  .rule-card .field label{display:block;font-weight:700;font-size:13px;margin-bottom:6px}
+  .rule-card .hint{color:var(--muted);font-size:12px;margin-top:5px}
+  .rule-card .checkrow{margin-top:12px}
+  .rule-head{display:flex;gap:10px;align-items:center}
+  .rule-head input{max-width:260px}
+  .rule-no{font-weight:800;color:var(--orange-dark);white-space:nowrap}
+  .rule-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
+  .rule-row input{flex:1 1 260px;max-width:420px}
+  .rule-chips{display:flex;flex-wrap:wrap;gap:2px}
+  .chip-all{background:#eef1f5;color:#5b6472;border-color:#dfe3ea}
+  .chip-x{border:none;background:none;color:inherit;cursor:pointer;font-weight:800;margin-left:4px;padding:0}
+  .contact-tbl{width:auto;min-width:520px}
+  .contact-tbl th{background:#f7f8fa;color:var(--muted);border-bottom:1px solid var(--line);padding:6px 8px;font-size:12px}
+  .contact-tbl td{padding:5px 8px;border-bottom:1px dashed var(--line)}
+  .contact-tbl td.seq{font-weight:800;color:var(--orange-dark);width:44px}
+  .contact-tbl td.ops{white-space:nowrap}
+  .contact-tbl input{width:170px}
+  .ph-hint{font-size:11px;margin-left:6px}
+  .rule-sum{display:block;line-height:1.7}
+  .rule-sum .rn{font-weight:800;color:var(--orange-dark)}
+  .rule-sum .rm{color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
@@ -138,7 +162,7 @@
     <a href="{{ url_for('add') }}" class="{{ 'active' if request.endpoint=='add' else '' }}">서버추가</a>
     <a href="{{ url_for('import_file') }}" class="{{ 'active' if request.endpoint=='import_file' else '' }}">일괄등록</a>
     {% endif %}
-    <a href="{{ url_for('monitor') }}" class="{{ 'active' if request.endpoint=='monitor' else '' }}">모니터링등록</a>
+    <a href="{{ url_for('monitor') }}" class="{{ 'active' if request.endpoint=='monitor' else '' }}">규칙 일괄적용</a>
     {% if current_role=='admin' %}
     <a href="{{ url_for('users_page') }}" class="{{ 'active' if request.endpoint=='users_page' else '' }}">계정관리</a>
     <a href="{{ url_for('audit_page') }}" class="{{ 'active' if request.endpoint=='audit_page' else '' }}">변경이력</a>
@@ -170,7 +194,7 @@
     <h2 id="viewTitle">패턴 현황</h2>
     <div class="body">
       <div id="viewBody" style="line-height:2.4"></div>
-      <div class="hint" style="color:var(--muted);font-size:12px;margin-top:14px">패턴 추가·삭제는 [모니터링등록] 메뉴에서 가능합니다.</div>
+      <div class="hint" style="color:var(--muted);font-size:12px;margin-top:14px">규칙 수정은 [수정] 또는 [규칙 일괄적용] 메뉴에서 가능합니다.</div>
     </div>
     <div class="foot"><button class="btn btn-primary" type="button" onclick="closeView()">닫기</button></div>
   </div>
