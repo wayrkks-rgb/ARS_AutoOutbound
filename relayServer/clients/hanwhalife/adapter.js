@@ -8,11 +8,16 @@ import { logger } from '../../logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// hostRegistry(Flask)가 기록하는 hosts.json 을 그대로 읽음 (Node 는 읽기 전용)
+// 기본값: <repo>/hostRegistry/data/hosts.json — 운영에서 위치를 바꾸면 양쪽 모두 HOST_DATA_FILE 로 동일하게 지정
+const DEFAULT_HOST_DATA_FILE = path.resolve(__dirname, '../../../hostRegistry/data/hosts.json');
+
 class HanwhaLifeAdapter extends AdapterBase {
 
     getConfigList() {
         try {
-            const content = fs.readFileSync('C:\\TEMP\\모니터링자동발신시스템구축\\hosts.json', 'utf-8');
+            const hostDataFile = process.env.HOST_DATA_FILE || DEFAULT_HOST_DATA_FILE;
+            const content = fs.readFileSync(hostDataFile, 'utf-8');
             return JSON.parse(content);
         } catch (err) {
             console.error('[SCC] 설정 파일 로드 에러:', err.message);

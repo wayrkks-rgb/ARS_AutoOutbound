@@ -55,14 +55,18 @@ venv\Scripts\python -m pip install --no-index --find-links=wheels -r requirement
 
 | 변수 | 설명 | 예시 / 기본값 |
 |------|------|--------------|
-| **`HOST_DATA_FILE`** | **[필수] Node.js가 읽는 JSON 경로.** WAS 로컬 경로로 변경 | `r"D:\was\data\hosts.json"` |
+| **`HOST_DATA_FILE`** | Node.js(relayServer)와 공유하는 JSON 경로. 기본값 그대로 쓰면 양쪽이 같은 파일을 봄 | `hostRegistry\data\hosts.json` |
 | **`SERVER_HOST`** | 바인딩 IP. `0.0.0.0`=모든 NIC, 특정 IP만 받으려면 그 IP | `0.0.0.0` |
-| **`SERVER_PORT`** | 서비스 포트. **Node.js와 다른 포트** 사용 | `8080` |
+| **`SERVER_PORT`** | 서비스 포트. **Node.js와 다른 포트** 사용 (relay 41001, dashboard 8080) | `8458` |
 | `USERS_FILE` | 계정 파일(Node 무관, 비번 해시 저장) | `data\users.json` |
 | `AUDIT_FILE` | 변경이력 로그(JSON 라인) | `data\audit.jsonl` |
 | `PAGE_SIZE` | 페이지당 건수 | `50` |
 
 환경변수로도 지정 가능: `set HOST_DATA_FILE=D:\was\data\hosts.json` 등.
+
+> **JSON 경로 공유**: `relayServer/clients/hanwhalife/adapter.js` 도 같은 기본값
+> (`<repo>\hostRegistry\data\hosts.json`)을 읽습니다. 경로를 바꾸려면 **Flask 환경변수와
+> `relayServer\.env` 양쪽에 같은 `HOST_DATA_FILE`** 을 지정하세요.
 
 > JSON과 WAS가 **같은 머신·같은 볼륨**이어야 원자적 교체가 보장됩니다(이미 그렇게 구성).
 > 기존 5필드 JSON 파일이 있으면, 첫 기동 시 `DAY/NIGHT/keyword`를 기본값으로 자동 보정합니다.
@@ -78,7 +82,7 @@ venv\Scripts\python app.py
 :: 운영 (waitress)
 venv\Scripts\python run_server.py
 ```
-접속: `http://서버IP:8080`  (방화벽 인바운드 허용 필요)
+접속: `http://서버IP:8458`  (방화벽 인바운드 허용 필요)
 
 ---
 

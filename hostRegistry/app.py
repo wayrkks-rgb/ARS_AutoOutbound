@@ -31,8 +31,9 @@ from openpyxl import Workbook, load_workbook
 # ===========================================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# [필수] Node.js 가 읽는 호스트 데이터 JSON 경로 (윈도우 경로는 r"..." 로!)
-#   예) HOST_DATA_FILE = r"D:\was\data\hosts.json"
+# Node.js(relayServer) 와 공유하는 호스트 데이터 JSON 경로
+#   기본값: <repo>/hostRegistry/data/hosts.json (relayServer adapter 기본값과 동일)
+#   위치를 바꿀 때는 양쪽 모두 환경변수 HOST_DATA_FILE 로 같은 경로를 지정
 HOST_DATA_FILE = os.environ.get(
     "HOST_DATA_FILE", os.path.join(BASE_DIR, "data", "hosts.json")
 )
