@@ -12,22 +12,26 @@ export function createCheckEventHandler({ queueManager, adapter }) {
 
             const task = queueManager.shift();
 
-            logger.info(`[발신 시작] 번호: ${task.phone} | 호스트: ${task.hostname} | 유형: ${task.prc_id} | 시스템: ${task.sys_id} | 발생시각: ${task.created_dt} | ID: ${task.id}`);
+            logger.info(`[발신 시작] 번호: ${task.phone}(${task.contact_name ?? '-'}) | 호스트: ${task.hostname} | metric: ${task.metric ?? '-'} | ${task.rule_name ?? '-'} ${task.contact_seq}순위 | 시도: ${task.attempt_count}/${task.max_attempts} | event_id: ${task.event_id} | call_id: ${task.call_id} | 묶음: ${task.matchCount}건`);
 
             return {
                 result: 'ok',
                 event: {
-                    queue_id:    task.id,
-                    status:      task.status,
-                    sys_id:      task.sys_id,
-                    sys_ip:      task.sys_ip,
-                    prc_id:      task.prc_id,
-                    event_id:    task.event_id,
-                    phone:       task.phone,
-                    memo:        adapter.processMemo(task.memo ?? ''),
-                    hostname:    task.hostname,
-                    created_dt:  task.created_dt,
-                    retry_count: task.retry_count,
+                    queue_id:     task.queue_id,
+                    call_id:      task.call_id,
+                    status:       'processing',
+                    sys_id:       task.sys_id,
+                    sys_ip:       task.sys_ip,
+                    prc_id:       task.prc_id,
+                    event_id:     task.event_id,
+                    phone:        task.phone,
+                    contact_name: task.contact_name,
+                    memo:         adapter.processMemo(task.memo ?? ''),
+                    metric:       task.metric,
+                    metric_value: task.metric_value,
+                    hostname:     task.hostname,
+                    created_dt:   task.created_dt,
+                    retry_count:  task.attempt_count - 1,
                 }
             };
         } catch (err) {

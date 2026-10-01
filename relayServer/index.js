@@ -6,6 +6,8 @@ import { adapter }          from './clients/hanwhalife/adapter.js';
 import { QueueManager }     from './core/QueueManager.js';
 import { createPoller }     from './core/Poller.js';
 import { createHttpServer } from './core/HttpServer.js';
+import { settings }         from './core/settings.js';
+import { startDashboard }   from './dashboard-server.js';
 import { logger }           from './logger.js';
 
 const PORT   = process.env.PORT   || 41001;
@@ -29,7 +31,8 @@ async function main() {
     const pool = await sql.connect(dbConfig);
     logger.info('[DB] MSSQL 연결 완료');
 
-    const queueManager = new QueueManager();
+    const queueManager = new QueueManager({ callbackKey: () => settings.callbackKey });
+    logger.info(`[설정] IVR 콜백 키: ${settings.callbackKey} | 재발신 간격: ${settings.retryIntervalSec}초 | 부담당 넘김 대기: ${settings.escalateDelaySec}초 | 기본 등급: ${settings.severity}`);
     const { checkAndProcess } = createPoller({ pool, queueManager, adapter });
 
     await checkAndProcess();
@@ -41,6 +44,11 @@ async function main() {
     server.listen(PORT, listenHost, () => {
         logger.info(`[READY] 서버 기동 — http://${listenHost}:${PORT}`);
     });
+
+    // 발신 현황 대시보드 (DASHBOARD_PORT, 기본 8080) — DASHBOARD_ENABLED=N 이면 끔
+    if ((process.env.DASHBOARD_ENABLED ?? 'Y').trim().toUpperCase() !== 'N') {
+        startDashboard(pool);
+    }
 }
 
 process.on('uncaughtException', err => {

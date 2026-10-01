@@ -150,40 +150,57 @@ GO
 
 /* ---------------------------------------------------------------------
    5. 발신 대상 가져오기 (Node 폴링) — pending / 재발신 시각 도래한 retry_wait
+      @one_per_event = 1 : 같은 event_id 로는 동시에 1건만 발신
+                           (IVR 콜백이 event_id 로 오는 동안 어느 통화인지 구분하기 위함)
+      @one_per_event = 0 : IVR 콜백이 call_id 로 올 때 — 같은 이벤트의 여러 담당자 동시 발신
    --------------------------------------------------------------------- */
 IF OBJECT_ID('IVROWN.usp_outbound_call_claim', 'P') IS NOT NULL
     DROP PROCEDURE IVROWN.usp_outbound_call_claim;
 GO
 CREATE PROCEDURE IVROWN.usp_outbound_call_claim
-    @limit INT
+    @limit         INT,
+    @one_per_event BIT = 1
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
+    DECLARE @pick    TABLE (call_id INT PRIMARY KEY);
     DECLARE @claimed TABLE (call_id INT, phone VARCHAR(20), attempt_count TINYINT);
 
     BEGIN TRAN;
 
-    WITH target AS (
-        SELECT TOP (@limit) *
-        FROM IVROWN.outbound_call WITH (ROWLOCK, UPDLOCK, READPAST)
-        WHERE status IN ('pending','retry_wait')
-          AND (next_attempt_dt IS NULL OR next_attempt_dt <= GETDATE())
-        ORDER BY ISNULL(next_attempt_dt, created_dt), call_id
-    )
-    UPDATE target
+    INSERT INTO @pick (call_id)
+    SELECT TOP (@limit) x.call_id
+    FROM (
+        SELECT c.call_id,
+               ISNULL(c.next_attempt_dt, c.created_dt) AS sort_dt,
+               ROW_NUMBER() OVER (PARTITION BY c.event_id
+                                  ORDER BY ISNULL(c.next_attempt_dt, c.created_dt), c.call_id) AS rn
+        FROM IVROWN.outbound_call c WITH (ROWLOCK, UPDLOCK, READPAST)
+        WHERE c.status IN ('pending','retry_wait')
+          AND (c.next_attempt_dt IS NULL OR c.next_attempt_dt <= GETDATE())
+          AND (@one_per_event = 0 OR NOT EXISTS (
+                SELECT 1 FROM IVROWN.outbound_call p
+                WHERE p.event_id = c.event_id AND p.status = 'processing'))
+    ) x
+    WHERE @one_per_event = 0 OR x.rn = 1
+    ORDER BY x.sort_dt, x.call_id;
+
+    UPDATE c
     SET status          = 'processing',
-        attempt_count   = attempt_count + 1,
+        attempt_count   = c.attempt_count + 1,
         last_attempt_dt = GETDATE()
-    OUTPUT INSERTED.call_id, INSERTED.phone, INSERTED.attempt_count INTO @claimed;
+    OUTPUT INSERTED.call_id, INSERTED.phone, INSERTED.attempt_count INTO @claimed
+    FROM IVROWN.outbound_call c
+    JOIN @pick k ON k.call_id = c.call_id;
 
     INSERT INTO IVROWN.outbound_call_attempt (call_id, attempt_no, phone)
     SELECT call_id, attempt_count, phone FROM @claimed;
 
     COMMIT;
 
-    SELECT c.call_id, c.event_id, c.hostname, c.metric, c.rule_name,
+    SELECT c.call_id, c.event_id, q.id AS queue_id, c.hostname, c.metric, c.rule_name,
            c.chain_no, c.contact_seq, c.contact_name, c.phone,
            c.attempt_count, c.max_attempts,
            q.sys_id, q.sys_ip, q.prc_id, q.event_cd, q.memo, q.metric_value, q.created_dt
@@ -249,14 +266,16 @@ GO
 /* ---------------------------------------------------------------------
    7. 미응답/실패 (IVR call-failed)
       attempt_count < max_attempts → retry_wait (@retry_interval_sec 뒤 재발신)
-      그 외                        → exhausted + 같은 체인 다음 순번을 pending 으로
+      그 외                        → exhausted + 같은 체인 다음 순번을 @escalate_delay_sec 뒤 pending
+      ※ 무응답 / 통화중 / 받았지만 확인 버튼 미입력 → 모두 IVR 이 call-failed 로 보내야 함
    --------------------------------------------------------------------- */
 IF OBJECT_ID('IVROWN.usp_outbound_call_failed', 'P') IS NOT NULL
     DROP PROCEDURE IVROWN.usp_outbound_call_failed;
 GO
 CREATE PROCEDURE IVROWN.usp_outbound_call_failed
     @call_id            INT,
-    @retry_interval_sec INT = 180,
+    @retry_interval_sec INT = 60,                 -- 같은 담당자 재발신 간격
+    @escalate_delay_sec INT = 60,                 -- 다음 담당자(부담당)로 넘어갈 때 대기
     @result             VARCHAR(20) = 'failed',   -- failed / timeout
     @bundle_id          INT = NULL,
     @silent             BIT = 0                   -- 1 이면 결과셋 생략(복구 프로시저에서 호출 시)
@@ -311,7 +330,7 @@ BEGIN
 
         IF @next_seq IS NOT NULL
             UPDATE IVROWN.outbound_call
-            SET status = 'pending', next_attempt_dt = GETDATE()
+            SET status = 'pending', next_attempt_dt = DATEADD(SECOND, @escalate_delay_sec, GETDATE())
             WHERE event_id = @event_id AND chain_no = @chain_no AND contact_seq = @next_seq;
     END
 
@@ -333,7 +352,8 @@ IF OBJECT_ID('IVROWN.usp_outbound_call_recover', 'P') IS NOT NULL
 GO
 CREATE PROCEDURE IVROWN.usp_outbound_call_recover
     @timeout_min        INT = 10,
-    @retry_interval_sec INT = 180
+    @retry_interval_sec INT = 60,
+    @escalate_delay_sec INT = 60
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -353,7 +373,8 @@ BEGIN
         DELETE FROM @stuck WHERE call_id = @id;
 
         EXEC IVROWN.usp_outbound_call_failed @call_id = @id,
-             @retry_interval_sec = @retry_interval_sec, @result = 'timeout', @silent = 1;
+             @retry_interval_sec = @retry_interval_sec, @escalate_delay_sec = @escalate_delay_sec,
+             @result = 'timeout', @silent = 1;
         SET @recovered += 1;
     END
 

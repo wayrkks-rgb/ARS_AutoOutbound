@@ -6,16 +6,24 @@ class MockAdapter extends AdapterBase {
         return [];
     }
 
-    async fetchAndLock() {
+    async dispatchEvents() {
+        return { dispatched: 0, noRoute: 0 };
+    }
+
+    async claimCalls() {
         return [];
     }
 
-    async markDone(pool, targetIds) {
-        return { rowsAffected: [targetIds.length] };
+    async findProcessingCallIds() {
+        return [];
     }
 
-    async markFailed(pool, evtId) {
-        return 1;
+    async markDone(pool, callIds) {
+        return callIds.length;
+    }
+
+    async markFailed(pool, callIds) {
+        return callIds.map(call_id => ({ call_id, new_status: 'retry_wait', attempt_count: 1 }));
     }
 }
 
