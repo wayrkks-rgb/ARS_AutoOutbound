@@ -1,0 +1,26 @@
+[
+  {
+    "hostname": "SCC-IVR01",
+    "ip": "10.19.19.55",
+    "department": "금융운영팀",
+    "name": "홍길동",
+    "phone": "01012345678",
+    "DAY": "Y",
+    "NIGHT": "N",
+    "keyword": [
+      "error",
+      "warning",
+      "critical"
+    ]
+  },
+  {
+    "hostname": "hlippdssvm02",
+    "ip": "10.19.17.187",
+    "department": "금융운영팀",
+    "name": "김철수",
+    "phone": "01098765432",
+    "DAY": "N",
+    "NIGHT": "Y",
+    "keyword": []
+  }
+]

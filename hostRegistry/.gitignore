@@ -1,0 +1,12 @@
+# 런타임 데이터 (운영 서버에서 생성/갱신됨 — 커밋 금지)
+data/hosts.json
+data/users.json
+data/audit.jsonl
+data/secret.key
+data/*.tmp
+
+# Python
+venv/
+__pycache__/
+*.pyc
+wheels/
