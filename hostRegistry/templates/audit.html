@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "_pager.html" import pager %}
+{% block title %}변경이력{% endblock %}
+{% block body %}
+<h1>변경 이력</h1>
+<p class="sub">계정별 작업 이력입니다. 총 {{ total }}건 · {{ page }}/{{ pages }} 페이지 (최신순)</p>
+
+<div class="tbl-wrap">
+  <table>
+    <thead><tr><th>시간</th><th>접속 IP</th><th>계정</th><th>작업</th><th>대상</th><th style="text-align:right">상세</th></tr></thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td class="mono" style="white-space:nowrap">{{ e.ts }}</td>
+        <td class="mono">{{ e.ip }}</td>
+        <td><strong>{{ e.user }}</strong></td>
+        <td>{{ labels.get(e.action, e.action) }}</td>
+        <td class="mono">{{ e.target }}</td>
+        <td style="text-align:right">
+          {% if e.detail %}<button type="button" class="btn btn-ghost btn-sm"
+             onclick='viewAudit({{ (labels.get(e.action, e.action))|tojson }}, {{ e.target|tojson }}, {{ e.detail|tojson }})'>상세</button>
+          {% else %}<span style="color:#c2c7cf">-</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">이력이 없습니다.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{{ pager('audit_page', page, pages, {}) }}
+
+<div class="modal-bg" id="auditModal">
+  <div class="modal" style="width:520px">
+    <h2 id="auditTitle">변경 상세</h2>
+    <div class="body"><div id="auditBody" style="font-size:13px"></div></div>
+    <div class="foot"><button class="btn btn-primary" type="button" onclick="closeAudit()">닫기</button></div>
+  </div>
+</div>
+<script>
+function fmtVal(v){
+  if(v===null||v===undefined) return '<span style="color:#c2c7cf">(없음)</span>';
+  if(Array.isArray(v)) return v.length? v.map(x=>'<span class="chip">'+escapeHtmlG(x)+'</span>').join(' ') : '<span style="color:#c2c7cf">(없음)</span>';
+  if(typeof v==='object') return renderObj(v);
+  return escapeHtmlG(String(v));
+}
+function renderObj(o){
+  let h='<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px">';
+  for(const k in o){ h+='<div style="color:var(--muted);font-weight:700">'+escapeHtmlG(k)+'</div><div>'+fmtVal(o[k])+'</div>'; }
+  return h+'</div>';
+}
+function viewAudit(action, target, detail){
+  document.getElementById('auditTitle').textContent = action + (target? ' · '+target : '');
+  let html='';
+  if(detail && detail.changed){
+    const c=detail.changed; const keys=Object.keys(c);
+    html = keys.length? '<div style="display:grid;grid-template-columns:auto 1fr;gap:8px 14px">'+
+      keys.map(k=>'<div style="color:var(--muted);font-weight:700">'+escapeHtmlG(k)+'</div><div><span style="color:var(--danger)">'+escapeHtmlG(String(c[k][0]))+'</span> → <span style="color:var(--ok)">'+escapeHtmlG(String(c[k][1]))+'</span></div>').join('')+'</div>'
+      : '<span style="color:#c2c7cf">변경된 내용이 없습니다.</span>';
+  } else { html = fmtVal(detail); }
+  document.getElementById('auditBody').innerHTML = html;
+  document.getElementById('auditModal').classList.add('open');
+}
+function closeAudit(){ document.getElementById('auditModal').classList.remove('open'); }
+document.addEventListener('click', e=>{ if(e.target && e.target.id==='auditModal') closeAudit(); });
+</script>
+{% endblock %}

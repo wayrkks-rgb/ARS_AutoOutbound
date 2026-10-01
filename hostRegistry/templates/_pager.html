@@ -1,0 +1,15 @@
+{% macro pager(endpoint, page, pages, extra={}) %}
+{% if pages > 1 %}
+<div class="pager">
+  <a class="{{ 'disabled' if page<=1 else '' }}" href="{{ url_for(endpoint, page=page-1, **extra) }}">이전</a>
+  {% set start = [1, page-2]|max %}
+  {% set end = [pages, page+2]|min %}
+  {% if start > 1 %}<a href="{{ url_for(endpoint, page=1, **extra) }}">1</a><span style="border:none">…</span>{% endif %}
+  {% for p in range(start, end+1) %}
+    <a class="{{ 'cur' if p==page else '' }}" href="{{ url_for(endpoint, page=p, **extra) }}">{{ p }}</a>
+  {% endfor %}
+  {% if end < pages %}<span style="border:none">…</span><a href="{{ url_for(endpoint, page=pages, **extra) }}">{{ pages }}</a>{% endif %}
+  <a class="{{ 'disabled' if page>=pages else '' }}" href="{{ url_for(endpoint, page=page+1, **extra) }}">다음</a>
+</div>
+{% endif %}
+{% endmacro %}
