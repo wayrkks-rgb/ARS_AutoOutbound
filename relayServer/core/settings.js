@@ -10,8 +10,11 @@ export const settings = {
     // 같은 담당자 재발신 간격 / 다음 담당자(부담당)로 넘어갈 때 대기 (초)
     get retryIntervalSec()  { return num('RETRY_INTERVAL_SEC', 60); },
     get escalateDelaySec()  { return num('ESCALATE_DELAY_SEC', 60); },
-    // IVR 이 콜백 $event-id$ 에 돌려주는 값: event_id(현재 시나리오) | call_id
-    get callbackKey()       { return str('IVR_CALLBACK_KEY', 'event_id') === 'call_id' ? 'call_id' : 'event_id'; },
+    // IVR 콜백($event-id$) 으로 통화를 식별하는 키
+    //   call_id (기본) : check-event 응답의 event_id 필드에 call_id 를 담아 보냄 → IVR 은 그대로 돌려줌(시나리오 수정 불필요)
+    //                    같은 이벤트의 여러 담당자도 동시 발신
+    //   event_id       : 실제 event_id 를 보냄. 같은 이벤트는 한 번에 1통화씩
+    get callbackKey()       { return str('IVR_CALLBACK_KEY', 'call_id') === 'event_id' ? 'event_id' : 'call_id'; },
     // 등급 무관(any_level) 이 아닌 규칙은 이 event_cd 만 발신
     get severity()          { return str('SEVERITY_LEVEL', '심각'); },
     // catch-all('*') 규칙에서 제외할 로그 감시 sys_id (기존 필터 유지)
@@ -25,4 +28,7 @@ export const settings = {
     get recoverTimeoutMin() { return num('RECOVER_TIMEOUT_MIN', 10); },
     // 폴링 1회에 배정할 최대 이벤트 수
     get dispatchBatch()     { return num('DISPATCH_BATCH', 100); },
+    // 현황 API (hostRegistry 웹이 같은 서버에서 프록시로 호출) — 외부 노출 안 함
+    get statusApiHost()     { return str('DASHBOARD_HOST', '127.0.0.1'); },
+    get statusApiPort()     { return num('DASHBOARD_PORT', 8080); },
 };

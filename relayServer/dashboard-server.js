@@ -1,11 +1,10 @@
 import http from 'http';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import sql from 'mssql';
+import { settings } from './core/settings.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// 발신 현황 API (JSON 전용)
+// 화면은 hostRegistry 웹(8458)의 [현황] 메뉴가 같은 서버에서 이 API 를 프록시로 호출해서 그림
+// DB 접속 정보는 relayServer/.env 한 곳에만 둠. 기본 127.0.0.1 바인딩(외부 노출 안 함)
 
 // 이벤트(outbound_queue) 단위 상태
 //   pending 배정 대기 / dispatched 발신 진행 / processed 성공 / partial 일부 수신 / failed 실패 / no_route 대상 없음
@@ -45,7 +44,8 @@ function callWhere(sp, request) {
 const pageOf = sp => Math.max(1, parseInt(sp.get('page') || '1', 10) || 1);
 
 export function startDashboard(pool) {
-    const port = process.env.DASHBOARD_PORT || 8080;
+    const host = settings.statusApiHost;
+    const port = settings.statusApiPort;
 
     const server = http.createServer(async (req, res) => {
         const url = new URL(req.url, `http://localhost`);
@@ -58,13 +58,6 @@ export function startDashboard(pool) {
         };
 
         try {
-            // 정적 파일 서빙
-            if (pathname === '/' || pathname === '/index.html') {
-                const html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
-                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                return res.end(html);
-            }
-
             // 오늘 요약: 이벤트 결과 + 발신 건/시도 수
             if (pathname === '/api/stats/today') {
                 const result = await pool.request().query(`
@@ -202,8 +195,8 @@ export function startDashboard(pool) {
         }
     });
 
-    server.listen(port, () => {
-        console.log(`[DASHBOARD] 대시보드 서버 시작 - http://localhost:${port}`);
+    server.listen(port, host, () => {
+        console.log(`[STATUS API] 발신 현황 API 시작 - http://${host}:${port} (화면: hostRegistry 웹 [현황])`);
     });
     return server;
 }

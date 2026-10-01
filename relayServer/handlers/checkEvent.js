@@ -3,6 +3,8 @@ import { logger } from '../logger.js';
 // relay-server.js handlers['check-event'] 에 해당
 // memo 가공은 고객사마다 다르므로 adapter.processMemo() 위임
 
+// IVR 은 응답의 event_id 값을 콜백 $event-id$ 로 그대로 돌려줌
+// → 콜백 키가 call_id 면 event_id 필드에 call_id 를 담고, 실제 이벤트 번호는 source_event_id 로 전달
 export function createCheckEventHandler({ queueManager, adapter }) {
     return async () => {
         try {
@@ -23,7 +25,8 @@ export function createCheckEventHandler({ queueManager, adapter }) {
                     sys_id:       task.sys_id,
                     sys_ip:       task.sys_ip,
                     prc_id:       task.prc_id,
-                    event_id:     task.event_id,
+                    event_id:     queueManager.keyOf(task),
+                    source_event_id: task.event_id,
                     phone:        task.phone,
                     contact_name: task.contact_name,
                     memo:         adapter.processMemo(task.memo ?? ''),

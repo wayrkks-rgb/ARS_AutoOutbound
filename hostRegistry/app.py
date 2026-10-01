@@ -20,6 +20,8 @@ import secrets
 import tempfile
 import threading
 import math
+import urllib.error
+import urllib.request
 from datetime import datetime
 from functools import wraps
 
@@ -47,6 +49,8 @@ SERVER_PORT = int(os.environ.get("SERVER_PORT", "8458"))  # Node 와 다른 포�
 
 USERS_FILE = os.environ.get("USERS_FILE", os.path.join(BASE_DIR, "data", "users.json"))
 AUDIT_FILE = os.environ.get("AUDIT_FILE", os.path.join(BASE_DIR, "data", "audit.jsonl"))
+# 발신 현황 API (relayServer 가 같은 서버 127.0.0.1 에 띄움) — [현황] 화면이 이 주소를 프록시로 호출
+RELAY_STATUS_URL = os.environ.get("RELAY_STATUS_URL", "http://127.0.0.1:8080")
 # 규칙 입력 시 metric 자동완성 목록 (한 줄에 하나)
 METRIC_CATALOG_FILE = os.environ.get("METRIC_CATALOG_FILE",
                                      os.path.join(BASE_DIR, "data", "metric_catalog.txt"))
@@ -492,7 +496,7 @@ def login():
             session["role"] = u["role"]
             session["is_default_pw"] = bool(u.get("is_default"))
             audit("login")
-            return redirect(request.args.get("next") or url_for("index"))
+            return redirect(request.args.get("next") or url_for("dashboard"))
         flash("아이디 또는 비밀번호가 올바르지 않습니다.", "error")
     return render_template("login.html")
 
@@ -503,6 +507,36 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+
+
+# ===========================================================================
+#  현황 (메인) — relayServer 현황 API 프록시
+# ===========================================================================
+STATUS_PATH_RE = re.compile(r"^(stats/today|stats/daily|events|events/\d+|calls)$")
+_no_proxy_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+@app.route("/")
+@login_required
+def dashboard():
+    return render_template("dashboard.html")
+
+
+@app.route("/api/status/<path:sub>")
+@login_required
+def status_api(sub):
+    if not STATUS_PATH_RE.match(sub):
+        abort(404)
+    qs = request.query_string.decode("utf-8")
+    url = f"{RELAY_STATUS_URL.rstrip('/')}/api/{sub}" + (f"?{qs}" if qs else "")
+    try:
+        with _no_proxy_opener.open(url, timeout=10) as r:
+            return Response(r.read(), status=r.status, mimetype="application/json")
+    except urllib.error.HTTPError as e:
+        return Response(e.read(), status=e.code, mimetype="application/json")
+    except (urllib.error.URLError, OSError):
+        return jsonify({"error": f"중계서버(relayServer) 현황 API({RELAY_STATUS_URL})에 연결할 수 없습니다. "
+                                 "relayServer 가 실행 중인지 확인하세요."}), 502
 
 
 # ===========================================================================
@@ -529,7 +563,7 @@ def _search_args():
     return field, request.args.get("q", "").strip(), request.args.get("pat", "all").strip()
 
 
-@app.route("/")
+@app.route("/hosts")
 @login_required
 def index():
     field, q, pat = _search_args()
@@ -1090,7 +1124,7 @@ def change_password():
         session["is_default_pw"] = False
         audit("change_password")
         flash("비밀번호를 변경했습니다.", "success")
-        return redirect(url_for("index"))
+        return redirect(url_for("dashboard"))
     return render_template("change_password.html")
 
 

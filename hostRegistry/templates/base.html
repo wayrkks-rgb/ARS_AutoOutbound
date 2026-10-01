@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}서버 연락처 등록{% endblock %}</title>
+<title>{% block title %}모니터링 자동발신{% endblock %}</title>
 <style>
   :root{
     --orange:#F26522;--orange-dark:#D9531E;--orange-tint:#FFF3EC;--orange-line:#F8C9AC;
@@ -155,8 +155,9 @@
 <body>
 {% if current_user %}
 <header class="topbar">
-  <span class="brand"><span class="mark"></span>서버 연락처 등록</span>
+  <span class="brand"><span class="mark"></span>모니터링 자동발신</span>
   <nav class="mainnav">
+    <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint=='dashboard' else '' }}">현황</a>
     <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint=='index' else '' }}">서버등록</a>
     {% if current_role=='admin' %}
     <a href="{{ url_for('add') }}" class="{{ 'active' if request.endpoint=='add' else '' }}">서버추가</a>

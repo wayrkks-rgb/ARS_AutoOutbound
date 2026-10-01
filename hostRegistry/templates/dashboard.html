@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}현황{% endblock %}
+{% block body %}
+<style>
+  .stat-row.main .stat{border-left:4px solid var(--line)}
+  .stat.k-total{border-left-color:#3b82f6}.stat.k-total .num{color:#2563eb}
+  .stat.k-ok{border-left-color:#22c55e}.stat.k-ok .num{color:var(--ok)}
+  .stat.k-part{border-left-color:#f59e0b}.stat.k-part .num{color:#b45309}
+  .stat.k-fail{border-left-color:#ef4444}.stat.k-fail .num{color:var(--danger)}
+  .stat.k-run{border-left-color:#6366f1}.stat.k-run .num{color:#4f46e5}
+  .stat.k-none{border-left-color:#94a3b8}.stat.k-none .num{color:#64748b}
+  .stat-row.sub .num{font-size:20px}
+  .chart{display:flex;align-items:flex-end;gap:4px;height:150px;border-bottom:1px solid var(--line)}
+  .chart .bar{flex:1;display:flex;flex-direction:column-reverse;min-width:6px;height:100%}
+  .chart .bar span{display:block;width:100%}
+  .chart-x{display:flex;gap:4px;font-size:10px;color:var(--muted);margin-top:4px}
+  .chart-x div{flex:1;text-align:center;min-width:6px;white-space:nowrap;overflow:hidden}
+  .legend{display:inline-flex;gap:12px;font-size:12px;color:var(--muted);font-weight:600;margin-left:12px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+  .c-ok{background:#22c55e}.c-part{background:#f59e0b}.c-fail{background:#ef4444}.c-none{background:#cbd5e1}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px}
+  .tabs button{border:none;background:none;padding:10px 16px;font-weight:700;font-family:inherit;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px}
+  .tabs button.active{color:var(--orange-dark);border-bottom-color:var(--orange)}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+  .filters .fg{display:flex;flex-direction:column;gap:4px}
+  .filters label{font-size:12px;font-weight:700;color:var(--muted)}
+  .filters input,.filters select{width:auto;min-width:130px}
+  .filters input[type=date]{font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;color:var(--ink)}
+  .st{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+  .s-processed,.s-answered{background:var(--ok-bg);color:var(--ok)}
+  .s-partial{background:var(--warn-bg);color:var(--warn)}
+  .s-failed,.s-exhausted{background:var(--danger-bg);color:var(--danger)}
+  .s-dispatched,.s-processing,.s-pending{background:#e8efff;color:#1d4ed8}
+  .s-retry_wait{background:#efe9ff;color:#6d28d9}
+  .s-no_route,.s-standby,.s-cancelled{background:#eef1f5;color:#64748b}
+  .muted{color:var(--muted)} .wrap{max-width:280px;word-break:break-all}
+  tr.click{cursor:pointer}
+  .kv{display:grid;grid-template-columns:90px 1fr 90px 1fr;gap:6px 12px;font-size:13px;margin:0}
+  .kv dt{color:var(--muted);font-weight:700} .kv dd{margin:0}
+  .modal h3{font-size:14px;margin:18px 0 8px}
+  #apiError{display:none}
+  @media (max-width:900px){.kv{grid-template-columns:90px 1fr}}
+</style>
+
+<div style="display:flex;align-items:baseline;gap:12px">
+  <h1>발신 현황</h1>
+  <span class="sub" id="lastUpdated" style="margin:0">-</span>
+  <span class="spacer" style="flex:1"></span>
+  <button class="btn btn-ghost btn-sm" type="button" onclick="refreshAll()">새로고침</button>
+</div>
+<p class="sub">관제 이벤트 발생 → 수신 규칙에 맞는 담당자에게 발신 → 결과. 30초마다 요약이 갱신됩니다.</p>
+<div class="banner error" id="apiError"></div>
+
+<div class="stat-row main">
+  <div class="stat k-total"><div class="num" id="cEvents">-</div><div class="lbl">오늘 이벤트</div></div>
+  <div class="stat k-ok"><div class="num" id="cProcessed">-</div><div class="lbl">성공 (전원 수신) <span id="cRate"></span></div></div>
+  <div class="stat k-part"><div class="num" id="cPartial">-</div><div class="lbl">일부 수신</div></div>
+  <div class="stat k-fail"><div class="num" id="cFailed">-</div><div class="lbl">실패 (아무도 미수신)</div></div>
+  <div class="stat k-run"><div class="num" id="cRun">-</div><div class="lbl">진행 중</div></div>
+  <div class="stat k-none"><div class="num" id="cNoRoute">-</div><div class="lbl">발신 대상 없음</div></div>
+</div>
+<div class="stat-row sub">
+  <div class="stat"><div class="num" id="cCalls">-</div><div class="lbl">오늘 발신 건 (담당자 기준)</div></div>
+  <div class="stat"><div class="num" id="cAnswered">-</div><div class="lbl">수신</div></div>
+  <div class="stat"><div class="num" id="cExhausted">-</div><div class="lbl">3회 미응답 (해당 담당자 종료)</div></div>
+  <div class="stat"><div class="num" id="cAttempts">-</div><div class="lbl">총 전화 시도</div></div>
+</div>
+
+<div class="card" style="margin-bottom:18px">
+  <h3 style="margin:0 0 14px">최근 30일 이벤트 결과
+    <span class="legend"><span><i class="c-ok"></i>성공</span><span><i class="c-part"></i>일부 수신</span><span><i class="c-fail"></i>실패</span><span><i class="c-none"></i>대상 없음</span></span></h3>
+  <div class="chart" id="chart"></div>
+  <div class="chart-x" id="chartX"></div>
+</div>
+
+<div class="card">
+  <div class="tabs">
+    <button type="button" class="active" data-tab="events" onclick="switchTab('events')">이벤트별 현황</button>
+    <button type="button" data-tab="calls" onclick="switchTab('calls')">발신 이력 (담당자별)</button>
+  </div>
+
+  <div id="tab-events">
+    <div class="filters">
+      <div class="fg"><label>발생일</label><input type="date" id="eDate"></div>
+      <div class="fg"><label>결과</label>
+        <select id="eStatus"><option value="">전체</option><option value="processed">성공</option><option value="partial">일부 수신</option><option value="failed">실패</option><option value="dispatched">발신 중</option><option value="pending">배정 대기</option><option value="no_route">대상 없음</option></select></div>
+      <div class="fg"><label>호스트</label><input type="search" id="eHost" placeholder="포함 검색"></div>
+      <div class="fg"><label>metric</label><input type="search" id="eMetric" placeholder="포함 검색"></div>
+      <button class="btn btn-primary" type="button" onclick="loadEvents(1)">조회</button>
+      <button class="btn btn-ghost" type="button" onclick="resetFilters('events')">초기화</button>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>발생시각</th><th>호스트</th><th>metric</th><th>값</th><th>등급</th><th>결과</th><th>담당자 (상태)</th><th>수신/그룹</th><th>시도</th></tr></thead>
+      <tbody id="eBody"></tbody>
+    </table></div>
+    <div class="pager" id="ePager"></div>
+  </div>
+
+  <div id="tab-calls" style="display:none">
+    <div class="filters">
+      <div class="fg"><label>발신일</label><input type="date" id="cDate"></div>
+      <div class="fg"><label>결과</label>
+        <select id="cStatus"><option value="">전체</option><option value="answered">수신</option><option value="exhausted">3회 미응답</option><option value="retry_wait">재발신 대기</option><option value="processing">발신 중</option><option value="pending">발신 대기</option><option value="standby">부담당 대기</option><option value="cancelled">취소</option></select></div>
+      <div class="fg"><label>담당자</label><input type="search" id="cName" placeholder="이름"></div>
+      <div class="fg"><label>번호</label><input type="search" id="cPhone" placeholder="숫자"></div>
+      <div class="fg"><label>호스트</label><input type="search" id="cHost" placeholder="포함 검색"></div>
+      <button class="btn btn-primary" type="button" onclick="loadCalls(1)">조회</button>
+      <button class="btn btn-ghost" type="button" onclick="resetFilters('calls')">초기화</button>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>배정시각</th><th>담당자</th><th>번호</th><th>호스트</th><th>metric (이벤트)</th><th>규칙 · 순위</th><th>결과</th><th>시도</th><th>최근 시도</th><th>종료</th></tr></thead>
+      <tbody id="cBody"></tbody>
+    </table></div>
+    <div class="pager" id="cPager"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="detailModal">
+  <div class="modal" style="width:900px">
+    <h2 id="dTitle">이벤트 상세</h2>
+    <div class="body" id="dBody"></div>
+    <div class="foot"><button class="btn btn-primary" type="button" onclick="closeDetail()">닫기</button></div>
+  </div>
+</div>
+
+<script>
+const API = {{ (request.script_root ~ '/api/status/')|tojson }};
+const EVENT_LABEL = { pending: '배정 대기', dispatched: '발신 중', processing: '발신 중', processed: '성공', partial: '일부 수신', failed: '실패', no_route: '대상 없음' };
+const CALL_LABEL  = { standby: '부담당 대기', pending: '발신 대기', processing: '발신 중', retry_wait: '재발신 대기', answered: '수신', exhausted: '3회 미응답', cancelled: '취소(앞 순위 수신)' };
+const RESULT_LABEL = { answered: '수신', failed: '미응답', timeout: '결과 미수신' };
+
+const esc = s => escapeHtmlG(s ?? '');
+// DB 시각을 그대로 표시 (드라이버가 UTC 로 직렬화해도 시간대 변환 없이 벽시계 값 사용)
+const fmt = dt => dt ? String(dt).replace('T', ' ').replace(/\.\d+Z?$|Z$/, '') : '-';
+const fmtShort = dt => dt ? fmt(dt).slice(5, 16) : '-';
+const badge = (s, map) => `<span class="st s-${esc(s)}">${esc(map[s] || s || '-')}</span>`;
+const phoneFmt = p => { const d = String(p || '').replace(/\D/g, ''); return d.length === 11 ? `${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}` : esc(p || '-'); };
+const $ = id => document.getElementById(id);
+
+async function api(path) {
+  const r = await fetch(API + path);
+  let j; try { j = await r.json(); } catch (e) { throw new Error('현황 API 응답 오류 (' + r.status + ')'); }
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function showError(err) { const b = $('apiError'); b.textContent = err.message; b.style.display = 'block'; }
+function clearError() { $('apiError').style.display = 'none'; }
+
+async function loadToday() {
+  const s = await api('stats/today');
+  const set = (id, v) => $(id).textContent = (v ?? 0).toLocaleString();
+  set('cEvents', s.events); set('cProcessed', s.processed); set('cPartial', s.partial); set('cFailed', s.failed);
+  set('cRun', s.inProgress); set('cNoRoute', s.noRoute);
+  set('cCalls', s.calls); set('cAnswered', s.answered); set('cExhausted', s.exhausted); set('cAttempts', s.attempts);
+  const done = (s.processed || 0) + (s.partial || 0) + (s.failed || 0);
+  $('cRate').textContent = done ? `· 종료 건 중 ${Math.round((s.processed || 0) * 100 / done)}%` : '';
+}
+
+async function loadDaily() {
+  const rows = await api('stats/daily');
+  const byDate = Object.fromEntries(rows.map(r => [r.date, r]));
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    days.push(byDate[key] || { date: key, processed: 0, partial: 0, failed: 0, noRoute: 0 });
+  }
+  const max = Math.max(1, ...days.map(d => d.processed + d.partial + d.failed + d.noRoute));
+  const h = v => `${(v / max) * 100}%`;
+  $('chart').innerHTML = days.map(d =>
+    `<div class="bar" title="${d.date}\n성공 ${d.processed} / 일부 ${d.partial} / 실패 ${d.failed} / 대상없음 ${d.noRoute}">
+       <span class="c-ok" style="height:${h(d.processed)}"></span><span class="c-part" style="height:${h(d.partial)}"></span>
+       <span class="c-fail" style="height:${h(d.failed)}"></span><span class="c-none" style="height:${h(d.noRoute)}"></span></div>`).join('');
+  $('chartX').innerHTML = days.map((d, i) => `<div>${i % 5 === 4 || i === 29 ? d.date.slice(5) : ''}</div>`).join('');
+}
+
+function query(params) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+  return q.toString();
+}
+
+function pager(elId, res, loader) {
+  let html = `<span class="muted" style="border:none">총 ${res.total.toLocaleString()}건</span>`;
+  if (res.totalPages > 1) {
+    const s = Math.max(1, res.page - 2), e = Math.min(res.totalPages, res.page + 2);
+    html += `<a href="#" class="${res.page <= 1 ? 'disabled' : ''}" onclick="${loader}(${res.page - 1});return false">이전</a>`;
+    for (let p = s; p <= e; p++) html += `<a href="#" class="${p === res.page ? 'cur' : ''}" onclick="${loader}(${p});return false">${p}</a>`;
+    html += `<a href="#" class="${res.page >= res.totalPages ? 'disabled' : ''}" onclick="${loader}(${res.page + 1});return false">다음</a>`;
+  }
+  $(elId).innerHTML = html;
+}
+
+async function loadEvents(page = 1) {
+  const res = await api('events?' + query({ page, date: $('eDate').value, status: $('eStatus').value, host: $('eHost').value.trim(), metric: $('eMetric').value.trim() }));
+  $('eBody').innerHTML = res.data.length ? res.data.map(r => `
+    <tr class="click" onclick="openDetail(${r.event_id})">
+      <td class="mono" style="white-space:nowrap">${fmt(r.created_dt)}</td>
+      <td class="mono"><strong>${esc(r.hostname)}</strong></td>
+      <td class="wrap">${esc(r.metric || '-')}</td>
+      <td>${esc(r.metric_value ?? '')}</td>
+      <td>${esc(r.event_cd || '-')}</td>
+      <td>${badge(r.status, EVENT_LABEL)}</td>
+      <td class="wrap">${r.contacts ? r.contacts.split(', ').map(x => { const i = x.lastIndexOf(':'); return `${esc(x.slice(0, i))} <span class="muted">${esc(CALL_LABEL[x.slice(i + 1)] || x.slice(i + 1))}</span>`; }).join('<br>') : '<span class="muted">-</span>'}</td>
+      <td>${r.calls ? `${r.answered}/${r.chain_count ?? '-'}` : '-'}</td>
+      <td>${r.attempts ?? '-'}</td>
+    </tr>`).join('') : '<tr><td colspan="9" class="empty">조회 결과가 없습니다.</td></tr>';
+  pager('ePager', res, 'loadEvents');
+}
+
+async function loadCalls(page = 1) {
+  const res = await api('calls?' + query({ page, date: $('cDate').value, status: $('cStatus').value, name: $('cName').value.trim(), phone: $('cPhone').value.trim(), host: $('cHost').value.trim() }));
+  $('cBody').innerHTML = res.data.length ? res.data.map(r => `
+    <tr class="click" onclick="openDetail(${r.event_id})">
+      <td class="mono" style="white-space:nowrap">${fmt(r.created_dt)}</td>
+      <td><strong>${esc(r.contact_name || '-')}</strong></td>
+      <td class="mono">${phoneFmt(r.phone)}</td>
+      <td class="mono">${esc(r.hostname)}</td>
+      <td class="wrap">${esc(r.metric || '-')} ${r.metric_value ? `<span class="muted">(${esc(r.metric_value)})</span>` : ''}<br><span class="muted">event_id ${r.event_id} · ${esc(r.event_cd || '')}</span></td>
+      <td>${esc(r.rule_name || '-')} · ${r.contact_seq}순위</td>
+      <td>${badge(r.status, CALL_LABEL)}</td>
+      <td>${r.attempt_count}/${r.max_attempts}</td>
+      <td class="mono">${fmtShort(r.last_attempt_dt)}</td>
+      <td class="mono">${fmtShort(r.completed_dt)}</td>
+    </tr>`).join('') : '<tr><td colspan="10" class="empty">조회 결과가 없습니다.</td></tr>';
+  pager('cPager', res, 'loadCalls');
+}
+
+async function openDetail(eventId) {
+  try {
+    const { event: e, calls, attempts } = await api('events/' + eventId);
+    $('dTitle').textContent = `이벤트 ${e.event_id} · ${e.hostname}`;
+    const byCall = {};
+    attempts.forEach(a => (byCall[a.call_id] = byCall[a.call_id] || []).push(a));
+    $('dBody').innerHTML = `
+      <dl class="kv">
+        <dt>결과</dt><dd>${badge(e.status, EVENT_LABEL)}</dd><dt>등급</dt><dd>${esc(e.event_cd || '-')}</dd>
+        <dt>metric</dt><dd>${esc(e.metric || '-')}</dd><dt>값</dt><dd>${esc(e.metric_value ?? '-')}</dd>
+        <dt>시스템</dt><dd>${esc(e.sys_id || '-')} ${esc(e.sys_ip || '')}</dd><dt>유형</dt><dd>${esc(e.prc_id || '-')}</dd>
+        <dt>발생</dt><dd class="mono">${fmt(e.created_dt)}</dd><dt>종료</dt><dd class="mono">${fmt(e.completed_dt)}</dd>
+        <dt>메모</dt><dd style="grid-column:span 3" class="wrap">${esc(e.memo || '-')}</dd>
+      </dl>
+      <h3>담당자별 발신 (규칙마다 동시 진행, 순위는 앞 사람 3회 미응답 시 다음)</h3>
+      ${calls.length ? `<table><thead><tr><th>규칙</th><th>순위</th><th>담당자</th><th>번호</th><th>결과</th><th>시도</th><th>시도 이력</th></tr></thead><tbody>
+        ${calls.map(c => `<tr>
+          <td>${esc(c.rule_name || '-')}</td><td>${c.contact_seq}순위</td><td><strong>${esc(c.contact_name || '-')}</strong></td>
+          <td class="mono">${phoneFmt(c.phone)}</td>
+          <td>${badge(c.status, CALL_LABEL)}${c.status === 'retry_wait' || (c.status === 'pending' && c.next_attempt_dt) ? `<br><span class="muted">${fmtShort(c.next_attempt_dt)} 예정</span>` : ''}</td>
+          <td>${c.attempt_count}/${c.max_attempts}</td>
+          <td class="mono">${(byCall[c.call_id] || []).map(a => `${a.attempt_no}회 ${fmtShort(a.started_dt)} ${esc(RESULT_LABEL[a.result] || (a.ended_dt ? a.result : '진행 중'))}`).join('<br>') || '-'}</td>
+        </tr>`).join('')}</tbody></table>`
+      : `<p class="muted">${e.status === 'no_route' ? '매칭되는 수신 규칙이 없어 발신하지 않았습니다.' : '발신 정보가 없습니다.'}</p>`}`;
+    $('detailModal').classList.add('open');
+  } catch (err) { showError(err); }
+}
+function closeDetail() { $('detailModal').classList.remove('open'); }
+document.addEventListener('click', e => { if (e.target && e.target.id === 'detailModal') closeDetail(); });
+
+let currentTab = 'events';
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  $('tab-events').style.display = tab === 'events' ? '' : 'none';
+  $('tab-calls').style.display = tab === 'calls' ? '' : 'none';
+  (tab === 'events' ? loadEvents : loadCalls)(1).catch(showError);
+}
+function resetFilters(tab) {
+  document.querySelectorAll(`#tab-${tab} .filters input, #tab-${tab} .filters select`).forEach(i => i.value = '');
+  (tab === 'events' ? loadEvents : loadCalls)(1).catch(showError);
+}
+async function refreshAll() {
+  try {
+    await Promise.all([loadToday(), loadDaily(), currentTab === 'events' ? loadEvents(1) : loadCalls(1)]);
+    clearError();
+    $('lastUpdated').textContent = '갱신 ' + new Date().toLocaleTimeString('ko-KR');
+  } catch (err) { showError(err); }
+}
+['eHost', 'eMetric'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadEvents(1).catch(showError); }));
+['cName', 'cPhone', 'cHost'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadCalls(1).catch(showError); }));
+refreshAll();
+setInterval(() => { loadToday().then(clearError).catch(showError); }, 30000);
+</script>
+{% endblock %}

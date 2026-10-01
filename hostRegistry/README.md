@@ -68,7 +68,8 @@ venv\Scripts\python -m pip install --no-index --find-links=wheels -r requirement
 |------|------|--------------|
 | **`HOST_DATA_FILE`** | Node.js(relayServer)와 공유하는 JSON 경로. 기본값 그대로 쓰면 양쪽이 같은 파일을 봄 | `hostRegistry\data\hosts.json` |
 | **`SERVER_HOST`** | 바인딩 IP. `0.0.0.0`=모든 NIC, 특정 IP만 받으려면 그 IP | `0.0.0.0` |
-| **`SERVER_PORT`** | 서비스 포트. **Node.js와 다른 포트** 사용 (relay 41001, dashboard 8080) | `8458` |
+| **`SERVER_PORT`** | 서비스 포트. **Node.js와 다른 포트** 사용 (relay 41001, 현황 API 127.0.0.1:8080) | `8458` |
+| `RELAY_STATUS_URL` | [현황] 화면이 호출하는 relayServer 현황 API 주소 | `http://127.0.0.1:8080` |
 | `USERS_FILE` | 계정 파일(Node 무관, 비번 해시 저장) | `data\users.json` |
 | `AUDIT_FILE` | 변경이력 로그(JSON 라인) | `data\audit.jsonl` |
 | `PAGE_SIZE` | 페이지당 건수 | `50` |
@@ -121,7 +122,11 @@ nssm start HostRegistry
 
 ## 7. 메뉴별 동작 요약
 
-**서버등록 / 서버추가·수정**: 호스트네임은 대소문자 무시 고유키, 호스트네임·IP 중복은 거부(IP 는 서버에서도 형식 검사).
+**현황 (메인 화면, `/`)**: 오늘 이벤트 결과(성공/일부 수신/실패/진행 중/대상 없음), 담당자 기준 발신·수신·3회 미응답·총 시도,
+최근 30일 그래프, 이벤트별 현황(클릭 시 규칙·순위·번호·시도 이력), 발신 이력(누구에게/어떤 번호/어떤 이벤트/결과).
+relayServer 현황 API 를 프록시로 읽으므로 relayServer 가 실행 중이어야 합니다. admin·viewer 모두 조회 가능.
+
+**서버등록(`/hosts`) / 서버추가·수정**: 호스트네임은 대소문자 무시 고유키, 호스트네임·IP 중복은 거부(IP 는 서버에서도 형식 검사).
 서버마다 **수신 규칙**을 여러 개 등록합니다. 규칙 = 규칙명 + metric 조건(자동완성: `data/metric_catalog.txt`) +
 memo 키워드(선택) + 주간/야간 + 등급 무관 여부 + 담당자 목록(↑↓ 로 순서 변경). 같은 이름의 담당자가 다른 번호로
 등록돼 있으면 경고 후 확인 저장. 검색은 호스트네임/IP/부서/담당자/번호/규칙명/metric 으로 가능, 50건 페이지네이션.

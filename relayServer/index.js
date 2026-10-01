@@ -45,7 +45,7 @@ async function main() {
         logger.info(`[READY] 서버 기동 — http://${listenHost}:${PORT}`);
     });
 
-    // 발신 현황 대시보드 (DASHBOARD_PORT, 기본 8080) — DASHBOARD_ENABLED=N 이면 끔
+    // 발신 현황 API (127.0.0.1:DASHBOARD_PORT, 기본 8080) — 화면은 hostRegistry 웹 [현황]. DASHBOARD_ENABLED=N 이면 끔
     if ((process.env.DASHBOARD_ENABLED ?? 'Y').trim().toUpperCase() !== 'N') {
         startDashboard(pool);
     }

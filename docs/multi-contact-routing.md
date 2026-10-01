@@ -85,21 +85,23 @@ SQL: [`db/001_multi_contact_routing.sql`](../db/001_multi_contact_routing.sql) (
 2. 1에서 하나도 없으면 **`*` 기본 규칙** — "심각"만, 로그 감시(`sys_id = '시스템 로그 감시'`) 이벤트는 제외 (기존 필터 그대로)
 3. 둘 다 없으면 이벤트 상태 `no_route` (대시보드 '대상 없음')
 
-## IVR 콜백 키: event_id vs call_id
+## IVR 콜백 키 (IVR 시나리오 수정 없음)
 
-| | `IVR_CALLBACK_KEY=event_id` (기본, 현재 IVR 그대로) | `IVR_CALLBACK_KEY=call_id` |
+IVR 은 check-event 응답의 `event_id` 값을 콜백 `$event-id$` 로 그대로 돌려줍니다. 중계서버는 이 자리에 무엇을 담을지만 정합니다.
+
+| | `IVR_CALLBACK_KEY=call_id` (**기본**) | `IVR_CALLBACK_KEY=event_id` |
 |---|---|---|
-| IVR 시나리오 | 변경 없음 (`$event-id$` 에 event_id 를 돌려줌) | 응답의 `call_id` 를 `$event-id$` 로 돌려주도록 변경 |
-| 같은 이벤트에 담당 그룹 2개 이상 | **한 번에 1통화씩** (앞 통화 결과가 온 뒤 다음 그룹 발신) | **동시에** 발신 |
-| 서로 다른 이벤트 (OS 다운 → 가용성 / DB 프로세스 다운) | 동시에 발신 | 동시에 발신 |
+| 응답의 `event_id` 필드에 담는 값 | `call_id` (발신 1건 번호, 실제 이벤트 번호는 `source_event_id`) | 실제 `event_id` |
+| IVR 시나리오 | 변경 없음 | 변경 없음 |
+| 같은 이벤트에 담당 그룹 2개 이상 | **동시에** 발신 | 한 번에 1통화씩 |
 
-check-event 응답에는 두 값(`event_id`, `call_id`)이 모두 들어갑니다. IVR 시나리오가 바뀌면 `.env` 의 값만 바꾸면 됩니다.
+전제: IVR 이 `event_id` 값을 콜백으로 돌려주는 것 외에 다른 용도(자체 DB 기록 등)로 쓰지 않을 것.
 
 ## relayServer 설정 (.env, 모두 선택)
 
 | 키 | 기본값 | 설명 |
 |---|---|---|
-| `IVR_CALLBACK_KEY` | `event_id` | 위 표 참고 |
+| `IVR_CALLBACK_KEY` | `call_id` | 위 표 참고 |
 | `RETRY_INTERVAL_SEC` | `60` | 같은 담당자 재발신 간격 |
 | `ESCALATE_DELAY_SEC` | `60` | 3회 미응답 후 다음 담당자 발신까지 대기 |
 | `SEVERITY_LEVEL` | `심각` | 등급 무관이 아닌 규칙이 발신하는 event_cd |
@@ -108,10 +110,14 @@ check-event 응답에는 두 값(`event_id`, `call_id`)이 모두 들어갑니�
 | `DAY_START_HOUR` / `DAY_END_HOUR` | `9` / `18` | 주간 시간대 |
 | `RECOVER_TIMEOUT_MIN` | `10` | IVR 결과가 이 시간 안에 안 오면 미응답(timeout) 처리 |
 | `DISPATCH_BATCH` | `100` | 폴링 1회 배정 최대 이벤트 수 |
-| `DASHBOARD_PORT` / `DASHBOARD_ENABLED` | `8080` / `Y` | 발신 현황 대시보드 |
+| `DASHBOARD_HOST` / `DASHBOARD_PORT` / `DASHBOARD_ENABLED` | `127.0.0.1` / `8080` / `Y` | 현황 API (웹 [현황] 화면이 같은 서버에서 호출, 외부 노출 안 함) |
 | `HOST_DATA_FILE` | `<repo>/hostRegistry/data/hosts.json` | 규칙 파일 (웹과 같은 경로) |
 
-## 대시보드 (relayServer, 기본 http://서버:8080)
+## 현황 화면 (웹 http://서버:8458 메인)
+
+화면은 웹(hostRegistry)의 첫 화면 [현황] 입니다. 웹이 같은 서버의 relayServer 현황 API(127.0.0.1:8080)를
+프록시로 호출하므로 DB 접속 정보는 relayServer/.env 한 곳에만 있습니다. relayServer 가 꺼져 있으면 화면에 연결 오류가 표시됩니다.
+
 
 - 오늘 이벤트: 성공(전원 수신) / 일부 수신 / 실패(아무도 미수신) / 진행 중 / 대상 없음
 - 오늘 발신: 담당자 기준 발신 건, 수신, 3회 미응답, 총 전화 시도 수
