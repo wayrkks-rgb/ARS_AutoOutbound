@@ -1,0 +1,15 @@
+[2026-07-08 17:23:25] ERROR: [POLLING ERROR] Invalid column name 'description'. | 원인: Invalid column name 'description'. | stack: RequestError: Invalid column name 'description'.
+    at handleError (D:\IS-IVR\ivr-relayServer-production\relayServer\node_modules\mssql\lib\tedious\request.js:384:15)
+    at Connection.emit (node:events:519:28)
+    at Connection.emit (D:\IS-IVR\ivr-relayServer-production\relayServer\node_modules\tedious\lib\connection.js:1013:18)
+    at RequestTokenHandler.onErrorMessage (D:\IS-IVR\ivr-relayServer-production\relayServer\node_modules\tedious\lib\token\handler.js:285:21)
+    at Readable.<anonymous> (D:\IS-IVR\ivr-relayServer-production\relayServer\node_modules\tedious\lib\token\token-stream-parser.js:19:33)
+    at Readable.emit (node:events:519:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushObjectMode (node:internal/streams/readable:538:3)
+    at Readable.push (node:internal/streams/readable:393:5)
+    at nextAsync (node:internal/streams/from:194:22)
+[2026-07-08 17:34:16] ERROR: [POLLING ERROR] isDayTime is not defined | stack: ReferenceError: isDayTime is not defined
+    at HanwhaLifeAdapter.fetchAndLock (file:///D:/IS-IVR/ivr-relayServer-production/relayServer/clients/hanwhalife/adapter.js:45:13)
+    at checkAndProcess (file:///D:/IS-IVR/ivr-relayServer-production/relayServer/core/Poller.js:25:47)
+    at main (file:///D:/IS-IVR/ivr-relayServer-production/relayServer/index.js:35:11)

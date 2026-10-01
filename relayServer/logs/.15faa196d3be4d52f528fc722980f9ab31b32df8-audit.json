@@ -1,0 +1,55 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\.15faa196d3be4d52f528fc722980f9ab31b32df8-audit.json",
+    "files": [
+        {
+            "date": 1783498871917,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-error-2026-07-08.log",
+            "hash": "618e9f24f926100494cb1d521c28b84db09e4332a3329995aaad98a88e19d0f3"
+        },
+        {
+            "date": 1783908671491,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-error-2026-07-13.log",
+            "hash": "d01f920abd0f6b4d7ed446d897eb3dff82a195b016d177e7ea06a9c9e23d54db"
+        },
+        {
+            "date": 1783988915049,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-error-2026-07-14.log",
+            "hash": "4794447e3f3942f8644f71caf0574380351a8e8639f00fb617309811a7352524"
+        },
+        {
+            "date": 1784097196216,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-error-2026-07-15.log",
+            "hash": "49ccd51de1b219c6e5df2f51f824e6bd380526ae05c881fe436ea4d20e01726d"
+        },
+        {
+            "date": 1784127609319,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-error-2026-07-16.log",
+            "hash": "fc58b40dbd2e3c7c73ba3f2c41e2605aac0a9eecd093791642dd90dd18e09cbe"
+        },
+        {
+            "date": 1784214006462,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-error-2026-07-17.log",
+            "hash": "92471db6b2a2d9406d42748c51893d417f3d911c1057172201650fe618156df7"
+        },
+        {
+            "date": 1784300408194,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-error-2026-07-18.log",
+            "hash": "8dd13bc2d852cffb0813e5a12734bd37d44ea8f2a0569436f73ac5e9bb98fc40"
+        },
+        {
+            "date": 1784386803289,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-error-2026-07-19.log",
+            "hash": "a438e91e1f669e95d8f92fb02eb46986e732cad7804a000b1c0da580fc23b1ea"
+        },
+        {
+            "date": 1784473205059,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-error-2026-07-20.log",
+            "hash": "8505e0009d8029a2b6c332776eba5a19dbcfd2858539d4cb59eb4d7821f6a501"
+        }
+    ],
+    "hashType": "sha256"
+}

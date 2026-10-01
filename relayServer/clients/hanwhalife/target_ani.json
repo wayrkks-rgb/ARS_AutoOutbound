@@ -1,0 +1,6 @@
+[
+    {"hostname": "SCC-IVR01", "ip": "1.1.1.1", "department": "금융운영팀", "name": "이찬행", "ani": "01012345678", "pattern": "ERROR", "DAY":"Y", "NIGHT":"Y", "keyword": []},
+    {"hostname": "SCC-IVR01", "ip": "1.1.1.1", "department": "금융운영팀", "name": "홍기웅", "ani": "01098765432", "pattern": "FATAL", "DAY":"Y", "NIGHT":"Y", "keyword": []},
+    {"hostname": "SCC-IVR02", "ip": "1.1.1.2", "department": "금융운영팀", "name": "이찬행", "ani": "01012345678", "DAY":"Y", "NIGHT":"Y", "keyword": ["errror", "timeout"]},
+    {"hostname": "SCC-IVR03", "ip": "1.1.1.3", "department": "금융운영팀", "name": "이찬행", "ani": "01012345678", "DAY":"Y", "NIGHT":"Y", "keyword": ["errror", "timeout"]}
+]

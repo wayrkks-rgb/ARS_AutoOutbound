@@ -1,0 +1,25 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "D:\\study\\ivr-relayServer-production\\relayServer\\logs\\.c5f040a3ad2c3900432bc691ed6e0b43c6e0b864-audit.json",
+    "files": [
+        {
+            "date": 1780475940785,
+            "name": "D:\\study\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-06-03.log",
+            "hash": "75d2b7725a75503cd641a4c613799b2ca3af7c8659b636b2efbe9b9c80bdc400"
+        },
+        {
+            "date": 1781429067182,
+            "name": "D:\\study\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-06-14.log",
+            "hash": "5b585a17fb56707d0c25db20df69afdfccc19e65f98f1e09f915c773ecd2917e"
+        },
+        {
+            "date": 1781484006077,
+            "name": "D:\\study\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-06-15.log",
+            "hash": "fb22fe65b3ef3f2cd99b88174570702d1c7d25eea6af9267bf2492caa053554d"
+        }
+    ],
+    "hashType": "sha256"
+}

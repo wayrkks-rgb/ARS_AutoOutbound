@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IVR 발신 모니터링</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; color: #1e293b; font-size: 14px; }
+
+/* Header */
+header { background: #1e293b; color: #fff; padding: 14px 28px; display: flex; justify-content: space-between; align-items: center; }
+header h1 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.header-right { display: flex; align-items: center; gap: 12px; font-size: 12px; color: #94a3b8; }
+.btn-refresh { padding: 5px 12px; background: #334155; border: none; border-radius: 6px; color: #e2e8f0; font-size: 12px; cursor: pointer; }
+.btn-refresh:hover { background: #475569; }
+
+/* Layout */
+.container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+
+/* Summary Cards */
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.card { background: #fff; border-radius: 10px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-left: 4px solid transparent; }
+.card.total   { border-left-color: #3b82f6; }
+.card.success { border-left-color: #22c55e; }
+.card.failed  { border-left-color: #ef4444; }
+.card.rate    { border-left-color: #f59e0b; }
+.card-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin-bottom: 10px; }
+.card-value { font-size: 36px; font-weight: 700; line-height: 1; }
+.card.total   .card-value { color: #3b82f6; }
+.card.success .card-value { color: #22c55e; }
+.card.failed  .card-value { color: #ef4444; }
+.card.rate    .card-value { color: #f59e0b; }
+.card-unit { font-size: 13px; color: #94a3b8; margin-top: 6px; }
+
+/* Chart */
+.chart-section { background: #fff; border-radius: 10px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 24px; }
+.section-title { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 16px; }
+.chart-wrap { height: 190px; }
+
+/* Tab Container */
+.tab-container { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden; }
+.tab-nav { display: flex; border-bottom: 1px solid #e2e8f0; padding: 0 20px; }
+.tab-btn { padding: 12px 18px; font-size: 13px; font-weight: 500; color: #64748b; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px; transition: all .15s; white-space: nowrap; }
+.tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+.tab-btn .badge { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 9999px; font-size: 10px; font-weight: 700; background: #fee2e2; color: #b91c1c; }
+.tab-panel { display: none; padding: 20px; }
+.tab-panel.active { display: block; }
+
+/* Filters */
+.filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: flex-end; }
+.fgroup { display: flex; flex-direction: column; gap: 4px; }
+.fgroup label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+.fgroup input, .fgroup select {
+    padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+    font-size: 13px; color: #374151; background: #fff; outline: none; height: 34px;
+}
+.fgroup input:focus, .fgroup select:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.15); }
+.btn { height: 34px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+.btn-primary { background: #2563eb; color: #fff; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-ghost { background: #f1f5f9; color: #475569; border: 1px solid #d1d5db; }
+.btn-ghost:hover { background: #e2e8f0; }
+
+/* Table */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { padding: 9px 12px; text-align: left; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; background: #f8fafc; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; color: #374151; }
+tbody tr:hover td { background: #f8fafc; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr { cursor: pointer; }
+
+/* Status Badges */
+.badge-status { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.s-processed  { background: #dcfce7; color: #15803d; }
+.s-failed     { background: #fee2e2; color: #b91c1c; }
+.s-processing { background: #dbeafe; color: #1d4ed8; }
+.s-pending    { background: #f3f4f6; color: #6b7280; }
+
+/* Pagination */
+.pagination { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
+.page-info { font-size: 12px; color: #6b7280; margin-right: 8px; }
+.page-btn { padding: 5px 10px; border-radius: 6px; font-size: 13px; border: 1px solid #d1d5db; background: #fff; color: #374151; cursor: pointer; min-width: 34px; }
+.page-btn:hover:not(:disabled) { background: #f1f5f9; }
+.page-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+.page-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Empty / Loading */
+.empty { text-align: center; padding: 48px 0; color: #94a3b8; font-size: 13px; }
+
+/* Modal */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 200; align-items: center; justify-content: center; }
+.overlay.open { display: flex; }
+.modal { background: #fff; border-radius: 12px; width: 90%; max-width: 740px; max-height: 82vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+.modal-head { padding: 20px 24px 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: #fff; z-index: 1; }
+.modal-head h2 { font-size: 15px; font-weight: 600; }
+.modal-close { font-size: 22px; line-height: 1; cursor: pointer; color: #94a3b8; background: none; border: none; }
+.modal-body { padding: 20px 24px; }
+
+/* Timeline */
+.timeline { position: relative; padding-left: 20px; }
+.timeline::before { content: ''; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 2px; background: #e5e7eb; }
+.tl-item { position: relative; margin-bottom: 20px; }
+.tl-item:last-child { margin-bottom: 0; }
+.tl-dot { position: absolute; left: -20px; top: 4px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 2px #d1d5db; background: #94a3b8; }
+.tl-dot.processed { background: #22c55e; box-shadow: 0 0 0 2px #22c55e; }
+.tl-dot.failed { background: #ef4444; box-shadow: 0 0 0 2px #ef4444; }
+.tl-dot.processing { background: #3b82f6; box-shadow: 0 0 0 2px #3b82f6; }
+.tl-time { font-size: 11px; color: #94a3b8; margin-bottom: 3px; }
+.tl-content { font-size: 13px; color: #374151; line-height: 1.6; }
+.tl-meta { font-size: 11px; color: #64748b; margin-top: 2px; }
+.tl-done { font-size: 11px; color: #15803d; }
+.tl-retry { font-size: 11px; color: #b91c1c; }
+
+/* Retry count color */
+.retry-high { color: #b91c1c; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>IVR 발신 모니터링</h1>
+  <div class="header-right">
+    마지막 갱신: <span id="lastRefresh">-</span>
+    <button class="btn-refresh" onclick="refreshAll()">새로고침</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- 오늘 통계 카드 -->
+  <div class="cards">
+    <div class="card total">
+      <div class="card-label">오늘 총 발신</div>
+      <div class="card-value" id="todayTotal">-</div>
+      <div class="card-unit">건</div>
+    </div>
+    <div class="card success">
+      <div class="card-label">성공</div>
+      <div class="card-value" id="todaySuccess">-</div>
+      <div class="card-unit">건</div>
+    </div>
+    <div class="card failed">
+      <div class="card-label">실패</div>
+      <div class="card-value" id="todayFailed">-</div>
+      <div class="card-unit">건</div>
+    </div>
+    <div class="card rate">
+      <div class="card-label">성공률</div>
+      <div class="card-value" id="todayRate">-</div>
+      <div class="card-unit">%</div>
+    </div>
+  </div>
+
+  <!-- 일별 추이 차트 -->
+  <div class="chart-section">
+    <div class="section-title">최근 30일 일별 발신 현황</div>
+    <div class="chart-wrap">
+      <canvas id="dailyChart"></canvas>
+    </div>
+  </div>
+
+  <!-- 탭 영역 -->
+  <div class="tab-container">
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab('history', this)">발신 이력</button>
+      <button class="tab-btn" onclick="switchTab('errors', this)">에러 목록 <span class="badge" id="errorBadge">0</span></button>
+    </div>
+
+    <!-- 발신 이력 탭 -->
+    <div class="tab-panel active" id="tab-history">
+      <div class="filters">
+        <div class="fgroup">
+          <label>ANI 번호</label>
+          <input id="fPhone" type="text" placeholder="010-xxxx-xxxx" style="width:150px" onkeydown="if(event.key==='Enter')loadHistory(1)">
+        </div>
+        <div class="fgroup">
+          <label>날짜</label>
+          <input id="fDate" type="date" style="width:145px">
+        </div>
+        <div class="fgroup">
+          <label>상태</label>
+          <select id="fStatus" style="width:110px">
+            <option value="">전체</option>
+            <option value="processed">성공</option>
+            <option value="failed">실패</option>
+            <option value="processing">처리중</option>
+            <option value="pending">대기중</option>
+          </select>
+        </div>
+        <div class="fgroup">
+          <label>호스트</label>
+          <input id="fHost" type="text" placeholder="SCC-IVR01" style="width:130px" onkeydown="if(event.key==='Enter')loadHistory(1)">
+        </div>
+        <div class="fgroup">
+          <label>&nbsp;</label>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="loadHistory(1)">검색</button>
+            <button class="btn btn-ghost" onclick="clearFilters()">초기화</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>발신 번호</th>
+              <th>호스트</th>
+              <th>유형</th>
+              <th>시스템</th>
+              <th>상태</th>
+              <th>재시도</th>
+              <th>발생 시각</th>
+              <th>완료 시각</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr><td colspan="9" class="empty">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="historyPaging"></div>
+    </div>
+
+    <!-- 에러 목록 탭 -->
+    <div class="tab-panel" id="tab-errors">
+      <div class="filters">
+        <div class="fgroup">
+          <label>기간</label>
+          <select id="errorDays" style="width:120px" onchange="loadErrors()">
+            <option value="1">오늘</option>
+            <option value="7" selected>최근 7일</option>
+            <option value="30">최근 30일</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>발신 번호</th>
+              <th>호스트</th>
+              <th>유형</th>
+              <th>시스템</th>
+              <th>재시도</th>
+              <th>발생 시각</th>
+              <th>실패 시각</th>
+            </tr>
+          </thead>
+          <tbody id="errorsBody">
+            <tr><td colspan="8" class="empty">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ANI 상세 모달 -->
+<div class="overlay" id="aniOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">ANI 발신 이력</h2>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="timeline" id="modalTimeline"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let chart = null;
+let currentPage = 1;
+let currentTotalPages = 1;
+
+// ── 탭 ───────────────────────────────────────────────
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'errors') loadErrors();
+}
+
+// ── 날짜/시각 포맷 ──────────────────────────────────
+function fmt(dt) {
+  if (!dt) return '-';
+  const d = new Date(dt);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} `
+       + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function fmtShort(dt) {
+  if (!dt) return '-';
+  const d = new Date(dt);
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// ── 상태 뱃지 ────────────────────────────────────────
+function statusBadge(s) {
+  const map = {
+    processed:  ['처리완료', 's-processed'],
+    failed:     ['실패',     's-failed'],
+    processing: ['처리중',   's-processing'],
+    pending:    ['대기중',   's-pending'],
+  };
+  const [label, cls] = map[s] || [s, 's-pending'];
+  return `<span class="badge-status ${cls}">${label}</span>`;
+}
+
+// ── 오늘 통계 ────────────────────────────────────────
+async function loadTodayStats() {
+  const data = await fetch('/api/stats/today').then(r => r.json());
+  document.getElementById('todayTotal').textContent   = data.total   ?? 0;
+  document.getElementById('todaySuccess').textContent = data.success ?? 0;
+  document.getElementById('todayFailed').textContent  = data.failed  ?? 0;
+  const rate = data.total > 0
+    ? ((data.success / data.total) * 100).toFixed(1)
+    : '0.0';
+  document.getElementById('todayRate').textContent = rate;
+}
+
+// ── 일별 차트 ────────────────────────────────────────
+async function loadDailyChart() {
+  const rows = await fetch('/api/stats/daily').then(r => r.json());
+  const labels  = rows.map(r => r.date.slice(5));          // MM-DD
+  const success = rows.map(r => r.success);
+  const failed  = rows.map(r => r.failed);
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('dailyChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: '성공', data: success, backgroundColor: '#86efac', borderRadius: 3, stack: 'a' },
+        { label: '실패', data: failed,  backgroundColor: '#fca5a5', borderRadius: 3, stack: 'a' },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12, padding: 12 } },
+        tooltip: {
+          callbacks: {
+            title: ([item]) => rows[item.dataIndex]?.date ?? '',
+            label: item => ` ${item.dataset.label}: ${item.raw}건`
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } },
+        y: { stacked: true, beginAtZero: true, ticks: { font: { size: 11 }, stepSize: 1 }, grid: { color: '#f1f5f9' } }
+      }
+    }
+  });
+}
+
+// ── 발신 이력 ────────────────────────────────────────
+async function loadHistory(page = 1) {
+  currentPage = page;
+  const params = new URLSearchParams({ page });
+  const phone  = document.getElementById('fPhone').value.trim();
+  const date   = document.getElementById('fDate').value;
+  const status = document.getElementById('fStatus').value;
+  const host   = document.getElementById('fHost').value.trim();
+  if (phone)  params.set('phone',  phone);
+  if (date)   params.set('date',   date);
+  if (status) params.set('status', status);
+  if (host)   params.set('host',   host);
+
+  const { data, total, totalPages } = await fetch(`/api/calls?${params}`).then(r => r.json());
+  currentTotalPages = totalPages;
+
+  const tbody = document.getElementById('historyBody');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty">조회된 데이터가 없습니다</td></tr>`;
+    document.getElementById('historyPaging').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = data.map(r => `
+    <tr onclick="showAniDetail('${r.phone || ''}')">
+      <td style="color:#94a3b8">${r.id}</td>
+      <td><strong>${r.phone || '-'}</strong></td>
+      <td>${r.hostname || '-'}</td>
+      <td>${r.prc_id  || '-'}</td>
+      <td>${r.sys_id  || '-'}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td class="${r.retry_count > 0 ? 'retry-high' : ''}">${r.retry_count ?? 0}회</td>
+      <td>${fmtShort(r.created_dt)}</td>
+      <td>${fmtShort(r.completed_dt)}</td>
+    </tr>
+  `).join('');
+
+  renderPaging(total, totalPages, page);
+}
+
+function renderPaging(total, tp, page) {
+  const el = document.getElementById('historyPaging');
+  let html = `<span class="page-info">총 ${total.toLocaleString()}건</span>`;
+  if (tp <= 1) { el.innerHTML = html; return; }
+
+  const start = Math.max(1, page - 2);
+  const end   = Math.min(tp, page + 2);
+  html += `<button class="page-btn" onclick="loadHistory(${page-1})" ${page<=1?'disabled':''}>‹</button>`;
+  if (start > 1) html += `<button class="page-btn" onclick="loadHistory(1)">1</button><span style="color:#94a3b8">…</span>`;
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i===page?'active':''}" onclick="loadHistory(${i})">${i}</button>`;
+  }
+  if (end < tp) html += `<span style="color:#94a3b8">…</span><button class="page-btn" onclick="loadHistory(${tp})">${tp}</button>`;
+  html += `<button class="page-btn" onclick="loadHistory(${page+1})" ${page>=tp?'disabled':''}>›</button>`;
+  el.innerHTML = html;
+}
+
+function clearFilters() {
+  document.getElementById('fPhone').value  = '';
+  document.getElementById('fDate').value   = '';
+  document.getElementById('fStatus').value = '';
+  document.getElementById('fHost').value   = '';
+  loadHistory(1);
+}
+
+// ── 에러 목록 ────────────────────────────────────────
+async function loadErrors() {
+  const days = document.getElementById('errorDays')?.value || 7;
+  const data = await fetch(`/api/errors?days=${days}`).then(r => r.json());
+
+  document.getElementById('errorBadge').textContent = data.length;
+
+  const tbody = document.getElementById('errorsBody');
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty">실패 건이 없습니다 ✓</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.map(r => `
+    <tr onclick="showAniDetail('${r.phone || ''}')">
+      <td style="color:#94a3b8">${r.id}</td>
+      <td><strong>${r.phone || '-'}</strong></td>
+      <td>${r.hostname || '-'}</td>
+      <td>${r.prc_id  || '-'}</td>
+      <td>${r.sys_id  || '-'}</td>
+      <td class="retry-high">${r.retry_count ?? 0}회</td>
+      <td>${fmtShort(r.created_dt)}</td>
+      <td>${fmtShort(r.processed_dt)}</td>
+    </tr>
+  `).join('');
+}
+
+// ── ANI 상세 모달 ────────────────────────────────────
+async function showAniDetail(phone) {
+  if (!phone || phone === '-') return;
+  document.getElementById('modalTitle').textContent = `${phone} 발신 이력`;
+  document.getElementById('aniOverlay').classList.add('open');
+  document.getElementById('modalTimeline').innerHTML = '<div class="empty">불러오는 중...</div>';
+
+  const data = await fetch(`/api/calls/ani/${encodeURIComponent(phone)}`).then(r => r.json());
+
+  if (!data.length) {
+    document.getElementById('modalTimeline').innerHTML = '<div class="empty">이력이 없습니다</div>';
+    return;
+  }
+
+  document.getElementById('modalTimeline').innerHTML = data.map(r => {
+    const doneText = r.completed_dt
+      ? `<span class="tl-done">→ 완료: ${fmt(r.completed_dt)}</span>`
+      : '';
+    const retryText = r.retry_count > 0
+      ? `<span class="tl-retry"> · 재시도 ${r.retry_count}회</span>`
+      : '';
+    return `
+      <div class="tl-item">
+        <div class="tl-dot ${r.status}"></div>
+        <div class="tl-time">${fmt(r.created_dt)}</div>
+        <div class="tl-content">
+          <strong>${r.hostname || '-'}</strong> &nbsp;${statusBadge(r.status)}${retryText}
+        </div>
+        <div class="tl-meta">${r.prc_id || '-'} &nbsp;|&nbsp; ${r.sys_id || '-'} &nbsp; ${doneText}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function closeModal() {
+  document.getElementById('aniOverlay').classList.remove('open');
+}
+
+// ── 전체 새로고침 ────────────────────────────────────
+function refreshAll() {
+  document.getElementById('lastRefresh').textContent =
+    new Date().toLocaleTimeString('ko-KR');
+  loadTodayStats();
+  loadDailyChart();
+  loadHistory(currentPage);
+}
+
+// 초기 로드
+refreshAll();
+</script>
+</body>
+</html>

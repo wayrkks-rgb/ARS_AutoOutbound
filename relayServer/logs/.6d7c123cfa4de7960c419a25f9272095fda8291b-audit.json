@@ -1,0 +1,65 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\.6d7c123cfa4de7960c419a25f9272095fda8291b-audit.json",
+    "files": [
+        {
+            "date": 1783498871914,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-08.log",
+            "hash": "ed8e731994808d9218ab1b53c5217aab4eff2771a9c5cb36eb9a7fb1af7ebeee"
+        },
+        {
+            "date": 1783522806176,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-09.log",
+            "hash": "0e2936fb655402214c244c50e897527edb42159f0d0cbbd323da91b549b42f9d"
+        },
+        {
+            "date": 1783908671488,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-13.log",
+            "hash": "9a5b9b6053e6a88a2e5d8eb45e43b4ce5987f110a993043e1e3cf4e8df4fb21b"
+        },
+        {
+            "date": 1783988915045,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-14.log",
+            "hash": "a8db60cc61294d2e96b6d697bc10641f8a37c30e4ce79d444d1ea7e12b0b8253"
+        },
+        {
+            "date": 1784041208305,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-15.log",
+            "hash": "30214d689235c4d8dabc71d0449a67ffb4e9c9d3e5c00e35b56225726f22ee9c"
+        },
+        {
+            "date": 1784127609315,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-16.log",
+            "hash": "f86f638c461756bda7ca83c5be895c0df45472c46755f168ef0dbbaf85996053"
+        },
+        {
+            "date": 1784214006459,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-17.log",
+            "hash": "1f2ea32f32998d102b8397d6675b96c9e0c2f6126948a072e37c577a1ab0c4cc"
+        },
+        {
+            "date": 1784300408192,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-18.log",
+            "hash": "dd7f70690a3c1c99b5414839d37077f634cecbe28492826e13146f6c4bd67520"
+        },
+        {
+            "date": 1784386803287,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-19.log",
+            "hash": "4b067de9163f2a92c298216b1399c82d9dfabae1b8a4203137fcedf543f81764"
+        },
+        {
+            "date": 1784473205057,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-20.log",
+            "hash": "ea31750729735768d8a8b534efcb9f967e2f7a47fd5930c5542b8d59410b76fa"
+        },
+        {
+            "date": 1784559600057,
+            "name": "D:\\IS-IVR\\ivr-relayServer-production\\relayServer\\logs\\relay-info-2026-07-21.log",
+            "hash": "0926455aadb2f98bd62e56d144e6740b33d8af1da474677421d63c29372cb06a"
+        }
+    ],
+    "hashType": "sha256"
+}
